@@ -5,24 +5,23 @@ from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, r
 
 class ConfidencePlot():
     def __init__(self,
-                 data:np.array,
+                 train_data:np.array,
+                 test_data:np.array,
                  labels:np.array,
                  title:str|None=None,
                  prev_pred:ConfidencePlot|None=None,
                  next_pred:ConfidencePlot|None=None):
-        self.data = data
+        self.train_data = train_data
+        self.test_data = test_data
         self.labels = labels
-        self.returned = np.zeros_like(self.data, dtype=bool)
+        self.returned = np.zeros_like(self.test_data, dtype=bool)
         self.title = title
         
         self.prev_pred = prev_pred
         self.next_pred = next_pred
         
         self.fig, (self.ax_hist, self.ax_cm, self.ax_metrics) = plt.subplots(1, 3, figsize=(15, 5))
-        if self.prev_pred is not None:
-            self.ax_hist.hist(self.data[~self.prev_pred.returned], bins=50, edgecolor="black")
-        else:
-            self.ax_hist.hist(self.data, bins=50, edgecolor="black")
+        self.ax_hist.hist(self.train_data, bins=50, edgecolor="black")
         
         # Initial line positions
         x1, x2 = 0, 1
@@ -76,10 +75,10 @@ class ConfidencePlot():
 
     def compute_metrics(self, lower_threshold, upper_threshold):
         if self.prev_pred is not None:
-            preds = np.copy(self.data[~self.prev_pred.returned])
+            preds = np.copy(self.test_data[~self.prev_pred.returned])
             labels = np.copy(self.labels[~self.prev_pred.returned])
         else:
-            preds = np.copy(self.data)
+            preds = np.copy(self.test_data)
             labels = np.copy(self.labels)
         cond = (preds < lower_threshold) | (preds > upper_threshold)
         self.returned = cond
@@ -128,7 +127,7 @@ class ConfidencePlot():
                 f"Precision: {prec:.4f}\n"
                 f"Recall:    {rec:.4f}\n"
                 f"F1 Score:  {f1:.4f}\n\n"
-                f"Percentage returned: {np.sum(self.returned)/len(self.data)*100:.2f}%"
+                f"Percentage returned: {np.sum(self.returned)/len(self.test_data)*100:.2f}%"
             )
             self.ax_metrics.text(0.05, 0.95, metrics_text, va='top', fontsize=13, family="monospace")
                     
@@ -142,7 +141,7 @@ class ConfidencePlot():
         plt.ylabel("Frequency")
         plt.title("Histogram of Confidence" if self.title is None else self.title)
 
-        plt.tight_layout()
+        plt.tight_layout(pad=3)
         if show:
             plt.show()
 
