@@ -47,9 +47,6 @@ class ConfidencePlotWidget(QWidget):
         layout.addWidget(self.btn)
         """
 
-        # Instead of plt.show(), we call choose_thresholds(show=False)
-        self.cp.choose_thresholds(show=False)
-
     def get_thresholds(self):
         try:
             t1, t2 = self.cp.get_thresholds()
@@ -85,6 +82,15 @@ class MainWindow(QWidget):
         layout.addWidget(self.plot_widget_exit_0)
         layout.addWidget(self.plot_widget_exit_1)
 
+        self.confidence_panels = [self.plot_widget_exit_0.cp,
+                                  self.plot_widget_exit_1.cp]
+
+        self.resize_histograms()
+        
+    def resize_histograms(self):
+        max_y = max([cp.max_hist_y for cp in self.confidence_panels])
+        new_y_lim = max_y + (0.05 * max_y)
+        for cp in self.confidence_panels: cp.set_hist_ylim(0, new_y_lim)
 
 def run(codename):
     app = QApplication(sys.argv)

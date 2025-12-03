@@ -19,10 +19,17 @@ class ConfidencePlot():
         
         self.prev_pred = prev_pred
         self.next_pred = next_pred
+
+        self.cm = None
+        self.acc = None
+        self.prec = None
+        self.rec = None
+        self.f1 = None
         
         self.fig, (self.ax_hist, self.ax_cm, self.ax_metrics) = plt.subplots(1, 3, figsize=(15, 5))
-        self.ax_hist.hist(self.train_data, bins=50, edgecolor="black")
-        
+        counts, _, _ = self.ax_hist.hist(self.train_data, bins=50, edgecolor="black", density=True)
+        self.max_hist_y = counts.max()
+
         # Initial line positions
         x1, x2 = 0, 1
         
@@ -39,7 +46,11 @@ class ConfidencePlot():
         self.fig.canvas.mpl_connect("button_release_event", self.on_release)
         self.fig.canvas.mpl_connect("key_press_event", self.on_key)
 
-        self.update_confusion_matrix()
+        self.update_metrics()
+
+        self.update_plots()
+
+        plt.tight_layout(pad=3)
 
     def on_pick(self, event):
         """When a line is clicked, mark it as selected."""
@@ -57,7 +68,7 @@ class ConfidencePlot():
         self.selected_line.set_xdata([event.xdata, event.xdata])
         self.lower_threshold = self.line1.get_xdata()[0]
         self.upper_threshold = self.line2.get_xdata()[0]
-        self.update_confusion_matrix()
+        self.update_metrics()
         self.fig.canvas.draw_idle()
 
     def on_release(self, event):
@@ -99,51 +110,58 @@ class ConfidencePlot():
 
         return None
             
-    def update_confusion_matrix(self):
-        """Recompute and redraw the confusion matrix based on threshold."""
+    def update_metrics(self):
+        """Recompute and redraw the metrics based on threshold."""
         res = self.compute_metrics(self.lower_threshold, self.upper_threshold)
 
         if res is not None:
-            cm, acc, prec, rec, f1 = res
-            self.ax_cm.clear()
-            self.ax_cm.imshow(cm, cmap="Blues")
-            self.ax_cm.set_title(f"Confusion Matrix\n(lower threshold={self.lower_threshold:.3f}, upper threshold={self.upper_threshold:.3f})")
-            self.ax_cm.set_xlabel("Predicted")
-            self.ax_cm.set_ylabel("Ground Truth")
-            self.ax_cm.set_xticks([0, 1], labels=["0", "1"])
-            self.ax_cm.set_yticks([0, 1], labels=["0", "1"])
+            self.cm, self.acc, self.prec, self.rec, self.f1 = res
+            self.update_plots()
 
+        if self.next_pred is not None:
+            self.next_pred.update_metrics()
+
+    def show_plot(self):
+        plt.show()
+
+    def update_plots(self):
+        if self.cm is not None:
+            self.ax_cm.clear()
+            self.ax_cm.imshow(self.cm, cmap="Blues")
             # Cell values
             for i in range(2):
                 for j in range(2):
-                    self.ax_cm.text(j, i, cm[i, j], ha='center', va='center', fontsize=14)
+                    color = "white" if self.cm[i, j] > self.cm.max() / 2 else "black"
+                    self.ax_cm.text(j, i, self.cm[i, j], ha='center', va='center', fontsize=14, color=color)
+        self.ax_cm.set_title(f"Confusion Matrix\n(lower threshold={self.lower_threshold:.3f}, upper threshold={self.upper_threshold:.3f})")
+        self.ax_cm.set_xlabel("Predicted")
+        self.ax_cm.set_ylabel("Ground Truth")
+        self.ax_cm.set_xticks([0, 1], labels=["0", "1"])
+        self.ax_cm.set_yticks([0, 1], labels=["0", "1"])
+        
+        self.ax_metrics.clear()
+        self.ax_metrics.axis('off')
+        self.ax_metrics.set_title("Metrics")
 
-            self.ax_metrics.clear()
-            self.ax_metrics.axis('off')
-            self.ax_metrics.set_title("Metrics")
-
+        if self.acc is not None and self.prec is not None and self.rec is not None and self.f1 is not None:
             metrics_text = (
-                f"Accuracy:  {acc:.4f}\n"
-                f"Precision: {prec:.4f}\n"
-                f"Recall:    {rec:.4f}\n"
-                f"F1 Score:  {f1:.4f}\n\n"
+                f"Accuracy:  {self.acc:.4f}\n"
+                f"Precision: {self.prec:.4f}\n"
+                f"Recall:    {self.rec:.4f}\n"
+                f"F1 Score:  {self.f1:.4f}\n\n"
                 f"Percentage returned: {np.sum(self.returned)/len(self.test_data)*100:.2f}%"
             )
-            self.ax_metrics.text(0.05, 0.95, metrics_text, va='top', fontsize=13, family="monospace")
-                    
-            self.fig.canvas.draw_idle()
-
-        if self.next_pred is not None:
-            self.next_pred.update_confusion_matrix()
-
-    def choose_thresholds(self, show=True):
-        plt.xlabel("Confidence")
-        plt.ylabel("Frequency")
-        plt.title("Histogram of Confidence" if self.title is None else self.title)
-
-        plt.tight_layout(pad=3)
-        if show:
-            plt.show()
+        else:
+            metrics_text = (
+                f"Accuracy:  N/A\n"
+                f"Precision: N/A\n"
+                f"Recall:    N/A\n"
+                f"F1 Score:  N/A\n\n"
+                f"Percentage returned: 0.0%"
+            )
+        self.ax_metrics.text(0.05, 0.95, metrics_text, va='top', fontsize=13, family="monospace")
+            
+        self.fig.canvas.draw_idle()
 
     def get_thresholds(self):
         return self.lower_threshold, self.upper_threshold
@@ -153,3 +171,6 @@ class ConfidencePlot():
 
     def set_next_pred(self, next_pred:ConfidencePlot):
         self.next_pred = next_pred
+
+    def set_hist_ylim(self, lower_lim, upper_lim):
+        self.ax_hist.set_ylim(lower_lim, upper_lim)
