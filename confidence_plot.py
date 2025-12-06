@@ -2,20 +2,26 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+from ee_cnn.experiments_db import EXPERIMENTS_DB
 
 class ConfidencePlot():
     def __init__(self,
                  train_data:np.array,
-                 test_data:np.array,
-                 labels:np.array,
-                 title:str|None=None,
+                 db_path:str,
+                 experiment_codename:str,
+                 dataset_codename:str,
+                 model_codename:str,
+                 exit_idx:int|None=None,
                  prev_pred:ConfidencePlot|None=None,
                  next_pred:ConfidencePlot|None=None):
+        self.db = EXPERIMENTS_DB(db_path)
+        self.test_data = self.db.get_scores(experiment_codename,
+                                            dataset_codename,
+                                            model_codename,
+                                            exit_idx)
+        self.labels = np.array(self.db.get_labels(dataset_codename))
         self.train_data = train_data
-        self.test_data = test_data
-        self.labels = labels
-        self.returned = np.zeros_like(self.test_data, dtype=bool)
-        self.title = title
+        self.returned = np.zeros_like(self.labels, dtype=bool)
         
         self.prev_pred = prev_pred
         self.next_pred = next_pred
@@ -84,27 +90,60 @@ class ConfidencePlot():
 
             plt.close(self.fig)
 
-    def compute_metrics(self, lower_threshold, upper_threshold):
+    def compute_answers(self):
+        answers = []
+        for sample_preds in self.test_data:
+            sample_answers = []
+            for pred in sample_preds:
+                if pred < self.lower_threshold: 
+                    sample_answers.append(0)
+                elif pred > self.upper_threshold:
+                    sample_answers.append(1)
+            if len(sample_answers) > 0:
+                # Majority voting
+                answers.append(int(sum(sample_answers)/len(sample_answers) > 0.5))
+            else:
+                answers.append(-1)
+        answers = np.array(answers)
+
+        valid_answers = (answers == 0) | (answers == 1)
+        if self.prev_pred is not None:
+            self.returned = self.prev_pred.returned & valid_answers
+            curr_returned = ~self.prev_pred.returned & valid_answers
+        else:
+            self.returned = valid_answers
+            curr_returned = valid_answers
+
+        answers = answers[curr_returned]
+        labels = self.labels[curr_returned]
+
+        return labels, answers
+            
+    def compute_metrics(self):
+        """
         if self.prev_pred is not None:
             preds = np.copy(self.test_data[~self.prev_pred.returned])
             labels = np.copy(self.labels[~self.prev_pred.returned])
         else:
             preds = np.copy(self.test_data)
             labels = np.copy(self.labels)
-        cond = (preds < lower_threshold) | (preds > upper_threshold)
+        print("PREDS", preds)
+        cond = (preds < self.lower_threshold) | (preds > self.upper_threshold)
         self.returned = cond
         preds = preds[cond]
         labels = labels[cond]
-        preds[preds > upper_threshold] = 1
-        preds[preds < lower_threshold] = 0
-        if len(preds) > 0:
-            cm = confusion_matrix(labels, preds)
+        preds[preds > self.upper_threshold] = 1
+        preds[preds < self.lower_threshold] = 0
+        """
+        labels, answers = self.compute_answers()
+        if len(answers) > 0:
+            cm = confusion_matrix(labels, answers)
 
             if cm.shape == (2, 2):
-                acc = accuracy_score(labels, preds)
-                prec = precision_score(labels, preds)
-                rec = recall_score(labels, preds)
-                f1 = f1_score(labels, preds)
+                acc = accuracy_score(labels, answers)
+                prec = precision_score(labels, answers)
+                rec = recall_score(labels, answers)
+                f1 = f1_score(labels, answers)
 
                 return cm, acc, prec, rec, f1
 
@@ -112,7 +151,7 @@ class ConfidencePlot():
             
     def update_metrics(self):
         """Recompute and redraw the metrics based on threshold."""
-        res = self.compute_metrics(self.lower_threshold, self.upper_threshold)
+        res = self.compute_metrics()
 
         if res is not None:
             self.cm, self.acc, self.prec, self.rec, self.f1 = res

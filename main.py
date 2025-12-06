@@ -9,21 +9,25 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from pathlib import Path
 import numpy as np
 
-from plot_confidence import ConfidencePlot
+from confidence_plot import ConfidencePlot
 
 
 class ConfidencePlotWidget(QWidget):
     def __init__(self,
                  train_data:np.array,
-                 test_data:np.array,
-                 labels:np.array,
-                 title:str|None=None,
+                 db_path:str,
+                 experiment_codename:str,
+                 dataset_codename:str,
+                 model_codename:str,
+                 exit_idx:int|None=None,
                  prev_pred:ConfidencePlot|None=None,
                  next_pred:ConfidencePlot|None=None):
         super().__init__()
 
         layout = QHBoxLayout(self)
 
+        title = f"Model: {model_codename}"
+        if exit_idx is not None: title += f"\nExit: {exit_idx}"
         self.label = QLabel(title)
         self.label.setAlignment(Qt.AlignCenter)
         font = QFont("Arial", 16)   # font family + size
@@ -32,7 +36,8 @@ class ConfidencePlotWidget(QWidget):
         self.label.setFont(font)
         
         # Create the ConfidencePlot object
-        self.cp = ConfidencePlot(train_data, test_data, labels, title, prev_pred, next_pred)
+        self.cp = ConfidencePlot(train_data, db_path, experiment_codename, dataset_codename,
+                                 model_codename, exit_idx, prev_pred, next_pred)
 
         # Create a Matplotlib canvas widget and insert the figure
         self.canvas = FigureCanvas(self.cp.fig)
@@ -56,27 +61,28 @@ class ConfidencePlotWidget(QWidget):
 
 
 class MainWindow(QWidget):
-    def __init__(self, data_path):
+    def __init__(self, threshold_data_path, db_path,
+                 experiment_codename, dataset_codename):
         super().__init__()
         self.setWindowTitle("Confidence Plot in PyQt5")
         layout = QVBoxLayout(self)
         
-        with open(data_path, "rb") as f:
+        with open(threshold_data_path, "rb") as f:
             data = pickle.load(f)
         train_scores_exit_0 = data["train"]["scores"][0]["scores"]
-        test_scores_exit_0 = data["test"]["scores"][0]["scores"]
         train_scores_exit_1 = data["train"]["scores"][1]["scores"]
-        test_scores_exit_1 = data["test"]["scores"][1]["scores"]
-        train_labels = data["train"]["labels"]
-        test_labels = data["test"]["labels"]
         self.plot_widget_exit_0 = ConfidencePlotWidget(train_scores_exit_0[:, 1],
-                                                       test_scores_exit_0[:, 1],
-                                                       test_labels,
-                                                       "Exit 0")
+                                                       db_path,
+                                                       experiment_codename,
+                                                       dataset_codename,
+                                                       "ee_cnn",
+                                                       0)
         self.plot_widget_exit_1 = ConfidencePlotWidget(train_scores_exit_1[:, 1],
-                                                       test_scores_exit_1[:, 1],
-                                                       test_labels,
-                                                       "Exit 1",
+                                                       db_path,
+                                                       experiment_codename,
+                                                       dataset_codename,
+                                                       "ee_cnn",
+                                                       1,
                                                        self.plot_widget_exit_0.cp)
         self.plot_widget_exit_0.cp.set_next_pred(self.plot_widget_exit_1.cp)
         layout.addWidget(self.plot_widget_exit_0)
@@ -92,19 +98,31 @@ class MainWindow(QWidget):
         new_y_lim = max_y + (0.05 * max_y)
         for cp in self.confidence_panels: cp.set_hist_ylim(0, new_y_lim)
 
-def run(codename):
+def run(threshold_data_path, db_path, experiment_codename, dataset_codename):
     app = QApplication(sys.argv)
-    w = MainWindow(codename)
+    w = MainWindow(threshold_data_path, db_path, experiment_codename, dataset_codename)
     w.show()
     sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, help="Path to the data to use")
+    parser.add_argument("--data", type=str, help="Path to the threshold")
+    parser.add_argument("--db", type=str, help="Path to the experiment db")
+    parser.add_argument("--experiment", type=str, help="The codename of the experiment")
+    parser.add_argument("--dataset", type=str, help="The codename of the dataset")
     args = parser.parse_args()
 
     if args.data is None:
         raise ValueError("Provide --data")
-    else:
-        run(args.data)
+
+    if args.db is None:
+        raise ValueError("Provide --db")
+
+    if args.experiment is None:
+        raise ValueError("Provide --experiment")
+
+    if args.dataset is None:
+        raise ValueError("Provide --dataset")
+    
+    run(args.data, args.db, args.experiment, args.dataset)
