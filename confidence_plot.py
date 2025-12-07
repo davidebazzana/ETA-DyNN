@@ -1,5 +1,6 @@
 from __future__ import annotations
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 from ee_cnn.experiments_db import EXPERIMENTS_DB
@@ -7,6 +8,7 @@ from ee_cnn.experiments_db import EXPERIMENTS_DB
 class ConfidencePlot():
     def __init__(self,
                  train_data:np.array,
+                 train_labels:np.array,
                  db_path:str,
                  experiment_codename:str,
                  dataset_codename:str,
@@ -21,18 +23,32 @@ class ConfidencePlot():
                                             exit_idx)
         self.labels = np.array(self.db.get_labels(dataset_codename))
         self.train_data = train_data
+        self.train_labels = train_labels
         self.returned = np.zeros_like(self.labels, dtype=bool)
+        self.curr_returned = np.zeros_like(self.labels, dtype=bool)
+        self.complete_answers = None
         
         self.prev_pred = prev_pred
         self.next_pred = next_pred
+
+        self.final_plot = None
 
         self.cm = None
         self.acc = None
         self.prec = None
         self.rec = None
         self.f1 = None
+
+        self.fig = plt.figure(figsize=(15, 5))
+        gs = gridspec.GridSpec(2, 3)
+
+        self.ax_hist = self.fig.add_subplot(gs[:, 0])
+        self.ax_train_cm = self.fig.add_subplot(gs[0, 1])
+        self.ax_train_metrics = self.fig.add_subplot(gs[1, 1])
+        self.ax_test_cm = self.fig.add_subplot(gs[0, 2])
+        self.ax_test_metrics = self.fig.add_subplot(gs[1, 2])
         
-        self.fig, (self.ax_hist, self.ax_cm, self.ax_metrics) = plt.subplots(1, 3, figsize=(15, 5))
+        # self.fig, (self.ax_hist, self.ax_cm, self.ax_metrics) = plt.subplots(2, 3, figsize=(15, 5))
         counts, _, _ = self.ax_hist.hist(self.train_data, bins=50, edgecolor="black", density=True)
         self.max_hist_y = counts.max()
 
@@ -54,7 +70,7 @@ class ConfidencePlot():
 
         self.update_metrics()
 
-        self.update_plots()
+        self.update_training_testing_plots()
 
         plt.tight_layout(pad=3)
 
@@ -100,42 +116,61 @@ class ConfidencePlot():
                 elif pred > self.upper_threshold:
                     sample_answers.append(1)
             if len(sample_answers) > 0:
-                # Majority voting
-                answers.append(int(sum(sample_answers)/len(sample_answers) > 0.5))
+                # Majority voting heuristic
+                # answers.append(int(sum(sample_answers)/len(sample_answers) > 0.5))
+                # Exist positive heuristic
+                answers.append(int(sum(sample_answers) >= 1))
             else:
                 answers.append(-1)
         answers = np.array(answers)
+        self.complete_answers = np.copy(answers)
 
         valid_answers = (answers == 0) | (answers == 1)
         if self.prev_pred is not None:
-            self.returned = self.prev_pred.returned & valid_answers
-            curr_returned = ~self.prev_pred.returned & valid_answers
+            self.returned = self.prev_pred.returned | valid_answers
+            self.curr_returned = ~self.prev_pred.returned & valid_answers
         else:
             self.returned = valid_answers
-            curr_returned = valid_answers
+            self.curr_returned = valid_answers
 
-        answers = answers[curr_returned]
-        labels = self.labels[curr_returned]
+        answers = answers[self.curr_returned]
+        labels = self.labels[self.curr_returned]
 
         return labels, answers
-            
+
+    def compute_training_answers(self):
+        valid_answers = (self.train_data < self.lower_threshold) | (self.train_data > self.upper_threshold)
+
+        answers = self.train_data[valid_answers]
+        labels = self.train_labels[valid_answers]
+        answers[answers > self.upper_threshold] = 1
+        answers[answers < self.lower_threshold] = 0
+
+        return labels, answers
+    
     def compute_metrics(self):
-        """
-        if self.prev_pred is not None:
-            preds = np.copy(self.test_data[~self.prev_pred.returned])
-            labels = np.copy(self.labels[~self.prev_pred.returned])
-        else:
-            preds = np.copy(self.test_data)
-            labels = np.copy(self.labels)
-        print("PREDS", preds)
-        cond = (preds < self.lower_threshold) | (preds > self.upper_threshold)
-        self.returned = cond
-        preds = preds[cond]
-        labels = labels[cond]
-        preds[preds > self.upper_threshold] = 1
-        preds[preds < self.lower_threshold] = 0
-        """
+        self.training_metrics = None
+        self.testing_metrics = None
+        
+        training_labels, training_answers = self.compute_training_answers()
         labels, answers = self.compute_answers()
+        if len(training_answers) > 0:
+            cm = confusion_matrix(training_labels, training_answers)
+
+            if cm.shape == (2, 2):
+                acc = accuracy_score(training_labels, training_answers)
+                prec = precision_score(training_labels, training_answers)
+                rec = recall_score(training_labels, training_answers)
+                f1 = f1_score(training_labels, training_answers)
+
+                self.training_metrics = {
+                    "cm": cm,
+                    "acc": acc,
+                    "prec": prec,
+                    "rec": rec,
+                    "f1": f1
+                }
+
         if len(answers) > 0:
             cm = confusion_matrix(labels, answers)
 
@@ -145,50 +180,48 @@ class ConfidencePlot():
                 rec = recall_score(labels, answers)
                 f1 = f1_score(labels, answers)
 
-                return cm, acc, prec, rec, f1
-
-        return None
+                self.testing_metrics = {
+                    "cm": cm,
+                    "acc": acc,
+                    "prec": prec,
+                    "rec": rec,
+                    "f1": f1
+                }
             
     def update_metrics(self):
         """Recompute and redraw the metrics based on threshold."""
-        res = self.compute_metrics()
+        self.compute_metrics()
 
-        if res is not None:
-            self.cm, self.acc, self.prec, self.rec, self.f1 = res
-            self.update_plots()
+        self.update_training_testing_plots()
 
         if self.next_pred is not None:
             self.next_pred.update_metrics()
 
+        if self.final_plot is not None:
+            self.final_plot.update_plot()
+
     def show_plot(self):
         plt.show()
 
-    def update_plots(self):
-        if self.cm is not None:
-            self.ax_cm.clear()
-            self.ax_cm.imshow(self.cm, cmap="Blues")
+    def update_training_testing_plots(self):
+        self.update_plots(self.training_metrics, self.ax_train_cm, self.ax_train_metrics)
+        self.update_plots(self.testing_metrics, self.ax_test_cm, self.ax_test_metrics)
+        
+    def update_plots(self, metrics, ax_cm, ax_metrics):
+        if metrics is not None:
+            ax_cm.clear()
+            ax_cm.imshow(metrics["cm"], cmap="Blues")
             # Cell values
             for i in range(2):
                 for j in range(2):
-                    color = "white" if self.cm[i, j] > self.cm.max() / 2 else "black"
-                    self.ax_cm.text(j, i, self.cm[i, j], ha='center', va='center', fontsize=14, color=color)
-        self.ax_cm.set_title(f"Confusion Matrix\n(lower threshold={self.lower_threshold:.3f}, upper threshold={self.upper_threshold:.3f})")
-        self.ax_cm.set_xlabel("Predicted")
-        self.ax_cm.set_ylabel("Ground Truth")
-        self.ax_cm.set_xticks([0, 1], labels=["0", "1"])
-        self.ax_cm.set_yticks([0, 1], labels=["0", "1"])
-        
-        self.ax_metrics.clear()
-        self.ax_metrics.axis('off')
-        self.ax_metrics.set_title("Metrics")
-
-        if self.acc is not None and self.prec is not None and self.rec is not None and self.f1 is not None:
+                    color = "white" if metrics["cm"][i, j] > metrics["cm"].max() / 2 else "black"
+                    ax_cm.text(j, i, metrics["cm"][i, j], ha='center', va='center', fontsize=9, color=color)
             metrics_text = (
-                f"Accuracy:  {self.acc:.4f}\n"
-                f"Precision: {self.prec:.4f}\n"
-                f"Recall:    {self.rec:.4f}\n"
-                f"F1 Score:  {self.f1:.4f}\n\n"
-                f"Percentage returned: {np.sum(self.returned)/len(self.test_data)*100:.2f}%"
+                f'Accuracy:  {metrics["acc"]:.4f}\n'
+                f'Precision: {metrics["prec"]:.4f}\n'
+                f'Recall:    {metrics["rec"]:.4f}\n'
+                f'F1 Score:  {metrics["f1"]:.4f}\n\n'
+                f'Percentage returned: {np.sum(self.returned)/len(self.test_data)*100:.2f}%'
             )
         else:
             metrics_text = (
@@ -198,7 +231,16 @@ class ConfidencePlot():
                 f"F1 Score:  N/A\n\n"
                 f"Percentage returned: 0.0%"
             )
-        self.ax_metrics.text(0.05, 0.95, metrics_text, va='top', fontsize=13, family="monospace")
+        ax_cm.set_title(f"Confusion Matrix\n(lower threshold={self.lower_threshold:.3f}, upper threshold={self.upper_threshold:.3f})", fontsize=11)
+        ax_cm.set_xlabel("Predicted")
+        ax_cm.set_ylabel("Ground Truth")
+        ax_cm.set_xticks([0, 1], labels=["0", "1"])
+        ax_cm.set_yticks([0, 1], labels=["0", "1"])
+        
+        ax_metrics.clear()
+        ax_metrics.axis('off')
+        ax_metrics.set_title("Metrics", fontsize=11)
+        ax_metrics.text(0.05, 0.95, metrics_text, va='top', fontsize=9, family="monospace")
             
         self.fig.canvas.draw_idle()
 
@@ -213,3 +255,9 @@ class ConfidencePlot():
 
     def set_hist_ylim(self, lower_lim, upper_lim):
         self.ax_hist.set_ylim(lower_lim, upper_lim)
+
+    def set_final_plot(self, final_plot):
+        self.final_plot = final_plot
+        
+    def close(self):
+        self.db.close()
