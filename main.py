@@ -2,16 +2,15 @@ import argparse
 import pickle
 import sys
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QStackedWidget
 from PyQt5.QtCore import *
 from PyQt5.QtGui import QFont
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from pathlib import Path
-import numpy as np
 
 from confidence_plot import ConfidencePlot
 from summary_plot import SummaryPlot
-
+from simulation_plot import SimulationPlot
 
 class SummaryPlotWidget(QWidget):
     def __init__(self,
@@ -89,11 +88,26 @@ class ConfidencePlotWidget(QWidget):
         except RuntimeError as e:
             print(e)
 
+class SimulationPlotWidget(QWidget):
+    def __init__(self, thresholds_window):
+        super().__init__()
 
-class MainWindow(QWidget):
-    def __init__(self, threshold_data_path, db_path,
+        layout = QHBoxLayout(self)
+
+        self.sp = SimulationPlot()
+        
+        self.canvas = FigureCanvas(self.sp.fig)
+        layout.addWidget(self.canvas)
+
+        self.sp.set_canvas(self.canvas)
+    
+class ThresholdsWindow(QWidget):
+    def __init__(self, stacked_widget, threshold_data_path, db_path,
                  experiment_codename, dataset_codename):
         super().__init__()
+
+        self.stacked_widget = stacked_widget
+
         self.setWindowTitle("Confidence Plot in PyQt5")
         layout = QVBoxLayout(self)
         
@@ -131,6 +145,11 @@ class MainWindow(QWidget):
                                                      dataset_codename)
 
         layout.addWidget(self.plot_widget_summary)
+
+        # TODO "Launch simulation" button
+        self.btn = QPushButton("Launch simulation")
+        self.btn.clicked.connect(self.launch_simulation)
+        layout.addWidget(self.btn)
                          
         self.resize_histograms()
         
@@ -139,11 +158,65 @@ class MainWindow(QWidget):
         new_y_lim = max_y + (0.05 * max_y)
         for cp in self.confidence_panels: cp.set_hist_ylim(0, new_y_lim)
 
+    def set_simulation_plot(self, simulation_plot):
+        self.simulation_plot = simulation_plot
+        
+    def launch_simulation(self):
+        returned_by_e0 = np.copy(self.plot_widget_summary.sp.returned_by_e0)
+        returned_by_e1 = np.copy(self.plot_widget_summary.sp.returned_by_e1)
+        returned_by_vit4v = np.copy(self.plot_widget_summary.sp.returned_by_vit4v)
+        answers = np.copy(self.plot_widget_summary.sp.global_answers)
+        labels = np.copy(self.plot_widget_summary.sp.labels)
+        self.simulation_plot.start_simulation(returned_by_e0,
+                                              returned_by_e1,
+                                              returned_by_vit4v,
+                                              answers,
+                                              labels)
+        self.stacked_widget.setCurrentIndex(1)
+
     def close_panels(self):
         for cp in self.confidence_panels:
             cp.close()
         self.plot_widget_summary.sp.close()
 
+class SimulationWindow(QWidget):
+    def __init__(self, stacked_widget, thresholds_window):
+        super().__init__()
+        self.stacked_widget = stacked_widget
+
+        layout = QVBoxLayout()
+
+        self.simulation_plot_widget = SimulationPlotWidget(thresholds_window)
+        layout.addWidget(self.simulation_plot_widget)
+        
+        btn = QPushButton("Quit Simulation")
+        btn.clicked.connect(self.back_to_thresholds_window)
+        layout.addWidget(btn)
+        self.setLayout(layout)
+
+    def back_to_thresholds_window(self):
+        self.stacked_widget.setCurrentIndex(0)
+        
+class MainWindow(QStackedWidget):
+    def __init__(self, threshold_data_path, db_path, experiment_codename, dataset_codename):
+        super().__init__()
+
+        # Create pages
+        self.thresholds_window = ThresholdsWindow(self, threshold_data_path, db_path, experiment_codename, dataset_codename)
+        self.simulation_window = SimulationWindow(self, self.thresholds_window)
+        self.thresholds_window.set_simulation_plot(self.simulation_window.simulation_plot_widget.sp)
+        
+        # Add pages to the stack
+        self.addWidget(self.thresholds_window)  # index 0
+        self.addWidget(self.simulation_window)  # index 1
+
+        self.setWindowTitle("Bee Simulator")
+        # self.resize(300, 150)
+        self.showMaximized()
+
+    def close_panels(self):
+        self.thresholds_window.close_panels()
+        
 def on_exit(w:QWidget):
     w.close_panels()
     print("Gracefully stopping...")
@@ -157,10 +230,10 @@ def run(threshold_data_path, db_path, experiment_codename, dataset_codename):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, help="Path to the threshold")
-    parser.add_argument("--db", type=str, help="Path to the experiment db")
-    parser.add_argument("--experiment", type=str, help="The codename of the experiment")
-    parser.add_argument("--dataset", type=str, help="The codename of the dataset")
+    parser.add_argument("--data", type=str, default="./scores.pkl", help="Path to the threshold")
+    parser.add_argument("--db", type=str, default="./experiments.db", help="Path to the experiment db")
+    parser.add_argument("--experiment", type=str, default="experiment_3", help="The codename of the experiment")
+    parser.add_argument("--dataset", type=str, default="vit_validation", help="The codename of the dataset")
     args = parser.parse_args()
 
     if args.data is None:

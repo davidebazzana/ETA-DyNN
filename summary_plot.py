@@ -63,7 +63,7 @@ class SummaryPlot():
         self.update_plot()
 
         plt.tight_layout(pad=3)
-
+        
     def retrieve_answers(self):
         self.returned_by_e0 = self.cp_e0.curr_returned
         self.returned_by_e1 = self.cp_e1.curr_returned
@@ -90,9 +90,11 @@ class SummaryPlot():
         exit_1_cost = np.copy(self.energy_performance["ee_cnn"]["exit_1"][phase][:,p_idx[p_metric]])
         vit4v_cost = np.copy(baseline_cost + exit_1_cost)
 
+        """
         if p_metric == "tot_energy" and phase == "inference":
             print(f"[TEST BEFORE] duration\nBASELINE: {baseline_cost}\nEXIT 0: {exit_0_cost}\nEXIT 1: {exit_1_cost}\nViT4V: {vit4v_cost}")
             print(f"[TEST BEFORE] Returned by e0: {~self.returned_by_e0}\nReturned by e1: {~self.returned_by_e1}\nReturned by ViT4V: {~self.returned_by_vit4v}")
+        """
         
         exit_0_cost[~self.returned_by_e0] = 0
         exit_1_cost[~self.returned_by_e1] = 0
@@ -101,8 +103,10 @@ class SummaryPlot():
         # saving_performance = baseline_cost - (exit_0_cost + exit_1_cost + vit4v_cost)
         complete_costs_vector = (exit_0_cost + exit_1_cost + vit4v_cost)
 
+        """
         if p_metric == "tot_energy" and phase == "inference":
             print(f"[TEST AFTER] duration\nBASELINE: {baseline_cost}\nEXIT 0: {exit_0_cost}\nEXIT 1: {exit_1_cost}\nViT4V: {vit4v_cost}")
+        """
         
         return np.sum(complete_costs_vector), np.sum(baseline_cost)
 

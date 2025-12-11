@@ -204,10 +204,10 @@ class ConfidencePlot():
         plt.show()
 
     def update_training_testing_plots(self):
-        self.update_plots(self.training_metrics, self.ax_train_cm, self.ax_train_metrics)
-        self.update_plots(self.testing_metrics, self.ax_test_cm, self.ax_test_metrics)
+        self.update_plots(self.training_metrics, self.ax_train_cm, self.ax_train_metrics, "training")
+        self.update_plots(self.testing_metrics, self.ax_test_cm, self.ax_test_metrics, "testing")
         
-    def update_plots(self, metrics, ax_cm, ax_metrics):
+    def update_plots(self, metrics, ax_cm, ax_metrics, stage):
         if metrics is not None:
             ax_cm.clear()
             ax_cm.imshow(metrics["cm"], cmap="Blues")
@@ -216,21 +216,24 @@ class ConfidencePlot():
                 for j in range(2):
                     color = "white" if metrics["cm"][i, j] > metrics["cm"].max() / 2 else "black"
                     ax_cm.text(j, i, metrics["cm"][i, j], ha='center', va='center', fontsize=9, color=color)
+            
             metrics_text = (
                 f'Accuracy:  {metrics["acc"]:.4f}\n'
                 f'Precision: {metrics["prec"]:.4f}\n'
                 f'Recall:    {metrics["rec"]:.4f}\n'
-                f'F1 Score:  {metrics["f1"]:.4f}\n\n'
-                f'Percentage returned: {np.sum(self.returned)/len(self.test_data)*100:.2f}%'
+                f'F1 Score:  {metrics["f1"]:.4f}\n\n'           
             )
+            if stage == "testing":
+                metrics_text += f'Percentage returned: {np.sum(self.returned)/len(self.test_data)*100:.2f}%'
         else:
             metrics_text = (
                 f"Accuracy:  N/A\n"
                 f"Precision: N/A\n"
                 f"Recall:    N/A\n"
                 f"F1 Score:  N/A\n\n"
-                f"Percentage returned: 0.0%"
             )
+            if stage == "testing":
+                metrics_text += f"Percentage returned: 0.0%"
         ax_cm.set_title(f"Confusion Matrix\n(lower threshold={self.lower_threshold:.3f}, upper threshold={self.upper_threshold:.3f})", fontsize=11)
         ax_cm.set_xlabel("Predicted")
         ax_cm.set_ylabel("Ground Truth")
