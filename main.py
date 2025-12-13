@@ -99,7 +99,17 @@ class SimulationPlotWidget(QWidget):
         self.canvas = FigureCanvas(self.sp.fig)
         layout.addWidget(self.canvas)
 
-        self.sp.set_canvas(self.canvas)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_plot)
+
+    def start_simulation(self):
+        self.timer.start(10)  # update every x ms
+
+    def stop_simulation(self):
+        self.timer.stop()
+
+    def update_plot(self):
+        self.sp.update_state()
     
 class ThresholdsWindow(QWidget):
     def __init__(self, stacked_widget, threshold_data_path, db_path,
@@ -158,8 +168,8 @@ class ThresholdsWindow(QWidget):
         new_y_lim = max_y + (0.05 * max_y)
         for cp in self.confidence_panels: cp.set_hist_ylim(0, new_y_lim)
 
-    def set_simulation_plot(self, simulation_plot):
-        self.simulation_plot = simulation_plot
+    def set_simulation_plot_widget(self, simulation_plot_widget):
+        self.simulation_plot_widget = simulation_plot_widget
         
     def launch_simulation(self):
         returned_by_e0 = np.copy(self.plot_widget_summary.sp.returned_by_e0)
@@ -167,12 +177,13 @@ class ThresholdsWindow(QWidget):
         returned_by_vit4v = np.copy(self.plot_widget_summary.sp.returned_by_vit4v)
         answers = np.copy(self.plot_widget_summary.sp.global_answers)
         labels = np.copy(self.plot_widget_summary.sp.labels)
-        self.simulation_plot.start_simulation(returned_by_e0,
-                                              returned_by_e1,
-                                              returned_by_vit4v,
-                                              answers,
-                                              labels)
         self.stacked_widget.setCurrentIndex(1)
+        self.simulation_plot_widget.sp.set_simulation(returned_by_e0,
+                                                      returned_by_e1,
+                                                      returned_by_vit4v,
+                                                      answers,
+                                                      labels)
+        self.simulation_plot_widget.start_simulation()
 
     def close_panels(self):
         for cp in self.confidence_panels:
@@ -195,6 +206,7 @@ class SimulationWindow(QWidget):
         self.setLayout(layout)
 
     def back_to_thresholds_window(self):
+        self.simulation_plot_widget.stop_simulation()
         self.stacked_widget.setCurrentIndex(0)
         
 class MainWindow(QStackedWidget):
@@ -204,7 +216,7 @@ class MainWindow(QStackedWidget):
         # Create pages
         self.thresholds_window = ThresholdsWindow(self, threshold_data_path, db_path, experiment_codename, dataset_codename)
         self.simulation_window = SimulationWindow(self, self.thresholds_window)
-        self.thresholds_window.set_simulation_plot(self.simulation_window.simulation_plot_widget.sp)
+        self.thresholds_window.set_simulation_plot_widget(self.simulation_window.simulation_plot_widget)
         
         # Add pages to the stack
         self.addWidget(self.thresholds_window)  # index 0
