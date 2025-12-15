@@ -1,3 +1,5 @@
+*.json
+
 *.org
 
 # Byte-compiled / optimized / DLL files

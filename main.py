@@ -2,7 +2,7 @@ import argparse
 import pickle
 import sys
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QStackedWidget
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QStackedWidget, QComboBox
 from PyQt5.QtCore import *
 from PyQt5.QtGui import QFont
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -92,8 +92,13 @@ class SimulationPlotWidget(QWidget):
     def __init__(self, thresholds_window):
         super().__init__()
 
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
 
+        combo = QComboBox()
+        combo.addItems(["Option 1", "Option 2", "Option 3"])
+
+        layout.addWidget(combo)
+        
         self.sp = SimulationPlot()
         
         self.canvas = FigureCanvas(self.sp.fig)
