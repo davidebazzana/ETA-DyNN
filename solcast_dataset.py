@@ -13,9 +13,92 @@ class SolcastDataset():
         self.data = self.read_dataset(path)
         self.dates = self.get_dates()
         self.plot_gti(self.dates[10])
-        for t in self.get_data_by_date(self.dates[10]):
-            print(f"data: {t}")
-    
+
+        data = self.get_data_by_date(self.dates[10])
+        solar_zenith = []
+        solar_azimuth = []
+        gti = []
+        T_amb = []
+        for t in data:
+            print(t)
+            solar_zenith.append(np.deg2rad(t["zenith"]))
+            solar_azimuth.append(np.deg2rad(t["azimuth"]))
+            gti.append(t["gti"])
+            T_amb.append(t["air_temp"])
+        solar_zenith = np.array(solar_zenith)
+        solar_azimuth = np.array(solar_azimuth)
+        gti = np.array(gti)
+        T_amb = np.array(T_amb)
+
+        alphas = np.linspace(0, np.pi/2, 400)
+        ALs = []
+        for i in alphas:
+            ALs.append(self.compute_angular_losses(1000, i))
+        plt.figure()
+        plt.plot(alphas, ALs)
+        plt.xlabel("Incidences")
+        plt.ylabel("Angular Losses")
+        plt.title("Plot of Angular Losses on [0, π/2]")
+        plt.grid(True)
+        plt.show()
+
+        aoi = self.compute_angle_of_incidence(solar_zenith=solar_zenith,
+                                              solar_azimuth=solar_azimuth)
+
+        x = np.array([datetime.fromisoformat(d["period_end"]) for d in data])
+        y_z = np.rad2deg(np.pi/2 - solar_zenith)
+        y_a = np.rad2deg(solar_azimuth)
+        y_aoi = np.rad2deg(aoi)
+        fig, ax = plt.subplots()
+
+        ax.plot(x, y_z, label="solar zenith")
+        ax.plot(x, y_a, label="solar azimuth")
+        ax.plot(x, y_aoi, label="angle of incidence")
+
+        start = x[0].replace(hour=0, minute=0)
+        end = start + timedelta(days=1)
+        ax.set_xlim(start, end)
+
+        ticks = [start + timedelta(hours=h) for h in range(0, 25, 2)]
+        ax.set_xticks(ticks)
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        
+        ax.set_xlabel("Time (HH:MM)")
+        ax.set_ylabel("Degrees")
+        ax.legend()
+
+        fig.autofmt_xdate()
+        plt.show()
+
+        real_p = self.compute_power_output(G=gti,
+                                           T_amb=T_amb,
+                                           solar_zenith=solar_zenith,
+                                           solar_azimuth=solar_azimuth)
+        fig, ax1 = plt.subplots()
+
+        line1, = ax1.plot(x, gti, label="gti")
+        ax1.set_xlabel("Time (HH:MM)")
+        ax1.set_ylabel("W/m^2")
+
+        ax2 = ax1.twinx()
+        line2, = ax2.plot(x, real_p, linestyle="--", label="power output")
+        ax2.set_ylabel("W")
+
+        start = x[0].replace(hour=0, minute=0)
+        end = start + timedelta(days=1)
+        ax1.set_xlim(start, end)
+
+        ticks = [start + timedelta(hours=h) for h in range(0, 25, 2)]
+        ax1.set_xticks(ticks)
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+
+        lines = [line1, line2]
+        labels = [line.get_label() for line in lines]
+        ax1.legend(lines, labels)
+
+        fig.autofmt_xdate()
+        plt.show()
+
     
     def read_dataset(self, path):
         """Read the dataset."""
@@ -57,7 +140,7 @@ class SolcastDataset():
         U_0, U_1 -- coefficients to compute the module temperature accounting for wind
         K_T -- coefficient to compute the module temperature without accounting for the wind
         """
-        if wind is not None:
+        if W is not None:
             T_mod = T_amb + (G / (U_0 + U_1 * W))
         else:
             T_mod = T_amb + K_T * G
@@ -65,35 +148,33 @@ class SolcastDataset():
         return T_mod
 
     
-    def compute_reflectivity_effect(self,
-                                    G:float,
-                                    sun_elevation:float,
-                                    sun_azimuth:float,
-                                    plane_tilt:float=35,
-                                    plane_orientation:float=180):
-        """Compute the reflectivity effect of the surface of a PV module.
+    def compute_angular_losses(self,
+                               G:float,
+                               alpha:float,
+                               a_r:float=0.159):
+        """Compute the angular losses of a PV module.
 
         Keyword arguments:
         G -- the in-plane irradiance (W/m**2)
-        sun_elevation -- the elevation of the sun (deg)
-        sun_azimuth -- the azimuth of the sun (deg)
-        plane_tilt -- the tilt of the PV module (deg)
-        plane_orientation -- the orientation of the PV module (deg)
+        alpha -- tha angle of incidence of the Sun's beam radiation on the PV module
+        a_r -- the angular losses coefficient
         """
-        pass
+        AL = 1 - ((1 - np.exp((-np.cos(alpha)) / a_r)) / (1 - np.exp(-1 / a_r)))
+        return AL
 
-
+    
     def compute_real_power_output(self,
                                   G:float,
                                   T_mod:float,
                                   G_STC:float=1000,
                                   T_mod_STC:float=25,
+                                  P_mod_STC:float=40,
                                   k1:float=-0.01724,
                                   k2:float=-0.04047,
                                   k3:float=-0.0047,
                                   k4:float=1.49*(10**-4),
                                   k5:float=1.47*(110**-4),
-                                  k6:float=5.0*(110**-6):
+                                  k6:float=5.0*(110**-6)):
         """Compute the real power output of a PV module.
 
         Keyword arguments:
@@ -101,9 +182,10 @@ class SolcastDataset():
         T_mod -- the PV module temperature (°C)
         G_STC -- the in-plane irradiance as defined by the Standard Test Conditions (default 1000 W/m**2)
         T_mod_STC -- the PV module temperature as defined by the Standard Test Conditions (default 25°C)
+        P_mod_STC -- the maximum power point of the PV module at STC (W)
         k1, k2, k3, k4, k5, k6 -- the empirical coefficients of the model
         """
-        G_prime = in_plane_irradiance / G_STC
+        G_prime = G / G_STC
         T_prime = T_mod - T_mod_STC
         P = G_prime * (P_mod_STC +
                        k1 * np.log(G_prime) +
@@ -116,7 +198,12 @@ class SolcastDataset():
         return P
 
 
-    def compute_relative_conversion_efficiency(self, P:float, G:float, G_STC:float=1000, T_mod_STC:float=25):
+    def compute_relative_conversion_efficiency(self,
+                                               P:float,
+                                               G:float,
+                                               G_STC:float=1000,
+                                               T_mod_STC:float=25,
+                                               P_mod_STC:float=40):
         """Compute the relative conversion efficiency of a PV module.
 
         Keyword arguments:
@@ -124,11 +211,40 @@ class SolcastDataset():
         G -- the in-plane irradiance (W/m**2)
         G_STC -- the in-plane irradiance as defined by the Standard Test Conditions (default 1000 W/m**2)
         T_mod_STC -- the PV module temperature as defined by the Standard Test Conditions (default 25°C)
+        P_mod_STC -- the maximum power point of the PV module at STC (W)
         """
         G_prime = G / G_STC
         eta_rel = P / (P_mod_STC * G_prime)
 
         return eta_rel
+
+
+    def compute_angle_of_incidence(self,
+                                   solar_zenith:float,
+                                   solar_azimuth:float,
+                                   tilt:float=np.deg2rad(35),
+                                   azimuth:float=np.deg2rad(180)):
+        """Compute the angle of incidence of the Sun's beam radiation and the PV module."""
+        aoi = np.arccos(np.cos(solar_zenith)*np.cos(tilt) + np.sin(solar_zenith)*np.sin(tilt)*np.cos(solar_azimuth - azimuth))
+
+        return aoi
+
+
+    def compute_power_output(self,
+                             G:float,
+                             T_amb:float,
+                             solar_zenith:float,
+                             solar_azimuth:float,
+                             tilt:float=np.deg2rad(35),
+                             azimuth:float=np.deg2rad(180),
+                             W:float|None=None):
+        incidence = self.compute_angle_of_incidence(solar_zenith,
+                                                    solar_azimuth,
+                                                    tilt,
+                                                    azimuth)
+        G = self.compute_angular_losses(G, incidence)
+        T_mod = self.compute_module_temperature(G, T_amb, W=W)
+        return self.compute_real_power_output(G, T_mod)
 
 
     def plot_gti(self, date:datetime.date):
