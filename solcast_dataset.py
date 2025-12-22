@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime, timedelta
+from battery import Battery
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class SolcastDataset():
         alphas = np.linspace(0, np.pi/2, 400)
         ALs = []
         for i in alphas:
-            ALs.append(self.compute_angular_losses(1000, i))
+            ALs.append(self.compute_angular_losses(i))
         plt.figure()
         plt.plot(alphas, ALs)
         plt.xlabel("Incidences")
@@ -73,30 +74,29 @@ class SolcastDataset():
         real_p = self.compute_power_output(G=gti,
                                            T_amb=T_amb,
                                            solar_zenith=solar_zenith,
-                                           solar_azimuth=solar_azimuth)
-        fig, ax1 = plt.subplots()
+                                           solar_azimuth=solar_azimuth,
+                                           show_plot=True,
+                                           time=x)
+        
+        soc_history = []
 
-        line1, = ax1.plot(x, gti, label="gti")
-        ax1.set_xlabel("Time (HH:MM)")
-        ax1.set_ylabel("W/m^2")
+        dt = (x[1]-x[0]).total_seconds() / 3600
+        print(f"{dt=}")
+        
+        battery = Battery()
+        for p_solar in real_p:
+            battery.recharge_battery(p_solar, dt)
+            soc_history.append(battery.soc * 100)
 
-        ax2 = ax1.twinx()
-        line2, = ax2.plot(x, real_p, linestyle="--", label="power output")
-        ax2.set_ylabel("W")
+        plt.figure(figsize=(12, 6))
 
-        start = x[0].replace(hour=0, minute=0)
-        end = start + timedelta(days=1)
-        ax1.set_xlim(start, end)
+        plt.subplot(1, 2, 2)
+        plt.plot(x, soc_history, color='green')
+        plt.title("Battery State of Charge (%)")
+        plt.xlabel("Hours")
+        plt.ylabel("SoC %")
 
-        ticks = [start + timedelta(hours=h) for h in range(0, 25, 2)]
-        ax1.set_xticks(ticks)
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-
-        lines = [line1, line2]
-        labels = [line.get_label() for line in lines]
-        ax1.legend(lines, labels)
-
-        fig.autofmt_xdate()
+        plt.tight_layout()
         plt.show()
 
     
@@ -149,18 +149,21 @@ class SolcastDataset():
 
     
     def compute_angular_losses(self,
-                               G:float,
                                alpha:float,
+                               G:float|None=None,
                                a_r:float=0.159):
         """Compute the angular losses of a PV module.
 
         Keyword arguments:
-        G -- the in-plane irradiance (W/m**2)
         alpha -- tha angle of incidence of the Sun's beam radiation on the PV module
+        G -- the in-plane irradiance (W/m**2)
         a_r -- the angular losses coefficient
         """
         AL = 1 - ((1 - np.exp((-np.cos(alpha)) / a_r)) / (1 - np.exp(-1 / a_r)))
-        return AL
+        if G is not None:
+            return np.maximum(G - (G * AL), 0)
+        else:
+            return AL
 
     
     def compute_real_power_output(self,
@@ -237,14 +240,63 @@ class SolcastDataset():
                              solar_azimuth:float,
                              tilt:float=np.deg2rad(35),
                              azimuth:float=np.deg2rad(180),
-                             W:float|None=None):
+                             W:float|None=None,
+                             show_plot:bool=False,
+                             time:np.array=None):
         incidence = self.compute_angle_of_incidence(solar_zenith,
                                                     solar_azimuth,
                                                     tilt,
                                                     azimuth)
-        G = self.compute_angular_losses(G, incidence)
-        T_mod = self.compute_module_temperature(G, T_amb, W=W)
-        return self.compute_real_power_output(G, T_mod)
+        G_AL = self.compute_angular_losses(incidence, G)
+        T_mod = self.compute_module_temperature(G_AL, T_amb, W=W)
+        real_p = self.compute_real_power_output(G_AL, T_mod)
+
+        if show_plot:
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+
+            line1, = ax1.plot(time, G, label="GTI")
+            line2, = ax1.plot(time, G_AL, label="GTI w AL")
+            ax1.set_xlabel("Time (HH:MM)")
+            ax1.set_ylabel("W/m^2")
+            ax1_2 = ax1.twinx()
+            line3, = ax1_2.plot(time, incidence, linestyle="--", label="Incidence")
+            ax1_2.set_ylabel("rad")
+            
+            lines = [line1, line2, line3]
+            labels = [line.get_label() for line in lines]
+            ax1.legend(lines, labels)
+            
+
+            ax2.plot(time, T_amb, label="Ambient Temperature")
+            ax2.plot(time, T_mod, label="PV Module Temperature")
+            ax2.set_xlabel("Time (HH:MM)")
+            ax2.set_ylabel("C°")
+            ax2.legend()
+
+            line1, = ax3.plot(time, G, label="gti")
+            ax3.set_xlabel("Time (HH:MM)")
+            ax3.set_ylabel("W/m^2")
+
+            ax3_2 = ax3.twinx()
+            line2, = ax3_2.plot(time, real_p, linestyle="--", label="power output")
+            ax3_2.set_ylabel("W")
+
+            start = time[0].replace(hour=0, minute=0)
+            end = start + timedelta(days=1)
+            ax3.set_xlim(start, end)
+
+            ticks = [start + timedelta(hours=h) for h in range(0, 25, 2)]
+            ax3.set_xticks(ticks)
+            ax3.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+
+            lines = [line1, line2]
+            labels = [line.get_label() for line in lines]
+            ax3.legend(lines, labels)
+
+            fig.autofmt_xdate()
+            plt.show()
+
+        return real_p
 
 
     def plot_gti(self, date:datetime.date):
