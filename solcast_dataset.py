@@ -13,91 +13,6 @@ class SolcastDataset():
     def __init__(self, path:str):
         self.data = self.read_dataset(path)
         self.dates = self.get_dates()
-        self.plot_gti(self.dates[10])
-
-        data = self.get_data_by_date(self.dates[10])
-        solar_zenith = []
-        solar_azimuth = []
-        gti = []
-        T_amb = []
-        for t in data:
-            print(t)
-            solar_zenith.append(np.deg2rad(t["zenith"]))
-            solar_azimuth.append(np.deg2rad(t["azimuth"]))
-            gti.append(t["gti"])
-            T_amb.append(t["air_temp"])
-        solar_zenith = np.array(solar_zenith)
-        solar_azimuth = np.array(solar_azimuth)
-        gti = np.array(gti)
-        T_amb = np.array(T_amb)
-
-        alphas = np.linspace(0, np.pi/2, 400)
-        ALs = []
-        for i in alphas:
-            ALs.append(self.compute_angular_losses(i))
-        plt.figure()
-        plt.plot(alphas, ALs)
-        plt.xlabel("Incidences")
-        plt.ylabel("Angular Losses")
-        plt.title("Plot of Angular Losses on [0, π/2]")
-        plt.grid(True)
-        plt.show()
-
-        aoi = self.compute_angle_of_incidence(solar_zenith=solar_zenith,
-                                              solar_azimuth=solar_azimuth)
-
-        x = np.array([datetime.fromisoformat(d["period_end"]) for d in data])
-        y_z = np.rad2deg(np.pi/2 - solar_zenith)
-        y_a = np.rad2deg(solar_azimuth)
-        y_aoi = np.rad2deg(aoi)
-        fig, ax = plt.subplots()
-
-        ax.plot(x, y_z, label="solar zenith")
-        ax.plot(x, y_a, label="solar azimuth")
-        ax.plot(x, y_aoi, label="angle of incidence")
-
-        start = x[0].replace(hour=0, minute=0)
-        end = start + timedelta(days=1)
-        ax.set_xlim(start, end)
-
-        ticks = [start + timedelta(hours=h) for h in range(0, 25, 2)]
-        ax.set_xticks(ticks)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        
-        ax.set_xlabel("Time (HH:MM)")
-        ax.set_ylabel("Degrees")
-        ax.legend()
-
-        fig.autofmt_xdate()
-        plt.show()
-
-        real_p = self.compute_power_output(G=gti,
-                                           T_amb=T_amb,
-                                           solar_zenith=solar_zenith,
-                                           solar_azimuth=solar_azimuth,
-                                           show_plot=True,
-                                           time=x)
-        
-        soc_history = []
-
-        dt = (x[1]-x[0]).total_seconds() / 3600
-        print(f"{dt=}")
-        
-        battery = Battery()
-        for p_solar in real_p:
-            battery.recharge_battery(p_solar, dt)
-            soc_history.append(battery.soc * 100)
-
-        plt.figure(figsize=(12, 6))
-
-        plt.subplot(1, 2, 2)
-        plt.plot(x, soc_history, color='green')
-        plt.title("Battery State of Charge (%)")
-        plt.xlabel("Hours")
-        plt.ylabel("SoC %")
-
-        plt.tight_layout()
-        plt.show()
 
     
     def read_dataset(self, path):
@@ -299,6 +214,29 @@ class SolcastDataset():
         return real_p
 
 
+    def retrieve_useful_data(self, date):
+        if date not in self.dates:
+            raise ValueError(f"Date {date} is not in the dataset")
+        data = self.get_data_by_date(date)
+        solar_zenith = []
+        solar_azimuth = []
+        gti = []
+        T_amb = []
+        for t in data:
+            solar_zenith.append(np.deg2rad(t["zenith"]))
+            solar_azimuth.append(np.deg2rad(t["azimuth"]))
+            gti.append(t["gti"])
+            T_amb.append(t["air_temp"])
+        solar_zenith = np.array(solar_zenith)
+        solar_azimuth = np.array(solar_azimuth)
+        gti = np.array(gti)
+        T_amb = np.array(T_amb)
+
+        time = np.array([datetime.fromisoformat(d["period_end"]) for d in data])
+
+        return solar_zenith, solar_azimuth, gti, T_amb, time
+
+
     def plot_gti(self, date:datetime.date):
         date_data = self.get_data_by_date(date)
         # fractional hours
@@ -329,3 +267,74 @@ if __name__ == "__main__":
     
     dataset = "./solcast_dataset_202408_sassari.json"
     solcast = SolcastDataset(dataset)
+
+    solcast.plot_gti(solcast.dates[10])
+
+    solar_zenith, solar_azimuth, gti, T_amb, x = solcast.retrieve_useful_data(solcast.dates[10])
+
+    alphas = np.linspace(0, np.pi/2, 400)
+    ALs = []
+    for i in alphas:
+        ALs.append(solcast.compute_angular_losses(i))
+    plt.figure()
+    plt.plot(alphas, ALs)
+    plt.xlabel("Incidences")
+    plt.ylabel("Angular Losses")
+    plt.title("Plot of Angular Losses on [0, π/2]")
+    plt.grid(True)
+    plt.show()
+
+    aoi = solcast.compute_angle_of_incidence(solar_zenith=solar_zenith,
+                                             solar_azimuth=solar_azimuth)
+
+    y_z = np.rad2deg(np.pi/2 - solar_zenith)
+    y_a = np.rad2deg(solar_azimuth)
+    y_aoi = np.rad2deg(aoi)
+    fig, ax = plt.subplots()
+
+    ax.plot(x, y_z, label="solar zenith")
+    ax.plot(x, y_a, label="solar azimuth")
+    ax.plot(x, y_aoi, label="angle of incidence")
+
+    start = x[0].replace(hour=0, minute=0)
+    end = start + timedelta(days=1)
+    ax.set_xlim(start, end)
+
+    ticks = [start + timedelta(hours=h) for h in range(0, 25, 2)]
+    ax.set_xticks(ticks)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        
+    ax.set_xlabel("Time (HH:MM)")
+    ax.set_ylabel("Degrees")
+    ax.legend()
+
+    fig.autofmt_xdate()
+    plt.show()
+
+    real_p = solcast.compute_power_output(G=gti,
+                                          T_amb=T_amb,
+                                          solar_zenith=solar_zenith,
+                                          solar_azimuth=solar_azimuth,
+                                          show_plot=True,
+                                          time=x)
+        
+    soc_history = []
+
+    dt = (x[1]-x[0]).total_seconds() / 3600
+    print(f"{dt=}")
+        
+    battery = Battery()
+    for p_solar in real_p:
+        battery.recharge_battery(p_solar, dt)
+        soc_history.append(battery.soc * 100)
+
+    plt.figure(figsize=(12, 6))
+    
+    plt.subplot(1, 2, 2)
+    plt.plot(x, soc_history, color='green')
+    plt.title("Battery State of Charge (%)")
+    plt.xlabel("Hours")
+    plt.ylabel("SoC %")
+
+    plt.tight_layout()
+    plt.show()
