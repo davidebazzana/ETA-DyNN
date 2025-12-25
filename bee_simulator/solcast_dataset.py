@@ -1,18 +1,115 @@
+from typing import Literal
 import logging
 import json
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime, timedelta
-from battery import Battery
+from environment_aware_task_allocation.battery import Battery
 
 logger = logging.getLogger(__name__)
 
 class SolcastDataset():
 
-    def __init__(self, path:str):
+    def __init__(self,
+                 path:str,
+                 dt:float=300,
+                 P_mod_STC:float=40):
         self.data = self.read_dataset(path)
         self.dates = self.get_dates()
+
+        gtis = []
+        power_outputs = []
+        timestamps = []
+        for date in self.dates:
+            solar_zenith, _ = self.retrieve_data(date, "zenith")
+            solar_azimuth, _ = self.retrieve_data(date, "azimuth")
+            gti, _ = self.retrieve_data(date, "gti")
+            T_amb, ts = self.retrieve_data(date, "air_temp")
+
+            if len(gti) != 288:
+                """Check if the date has a valid number of data points."""
+                continue
+            
+            real_p = self.compute_power_output(G=gti,
+                                               T_amb=T_amb,
+                                               solar_zenith=solar_zenith,
+                                               solar_azimuth=solar_azimuth,
+                                               P_mod_STC=P_mod_STC)
+            gtis.append(gti)
+            power_outputs.append(real_p)
+            timestamps.append(ts)
+        self.gtis = np.array(gtis)
+        self.power_outputs = np.array(power_outputs)
+        self.timestamps = np.array(timestamps)
+
+        resampled_timestamps = []
+        for ts in self.timestamps:
+            resampled_timestamps.append(self.resample_datetimes(ts, dt))
+        resampled_timestamps = np.array(resampled_timestamps)
+
+        resampled_gtis = []
+        resampled_power_outputs = []
+        for new_day, gtis, power_outputs, timestamps in zip(resampled_timestamps, self.gtis, self.power_outputs, self.timestamps):
+            new_day = np.linspace(0, 1, len(new_day))
+            timestamps = np.linspace(0, 1, len(timestamps))
+            resampled_gtis.append(np.interp(new_day, timestamps, gtis))
+            resampled_power_outputs.append(np.interp(new_day, timestamps, power_outputs))
+        resampled_gtis = np.array(resampled_gtis)
+        resampled_power_outputs = np.array(resampled_power_outputs)
+
+        self.day = 0
+        self.timestamps = resampled_timestamps
+        self.gtis = resampled_gtis
+        self.power_outputs = resampled_power_outputs
+
+    
+    def __iter__(self):
+        self.day = 0
+        return self
+
+
+    def __next__(self):
+        if self.day == len(self.timestamps):
+            raise StopIteration
+        ts = self.timestamps[self.day]
+        gtis = self.gtis[self.day]
+        power_outputs = self.power_outputs[self.day]
+        self.day += 1
+        return ts, gtis, power_outputs
+
+    def resample_datetimes(self, timestamps: np.ndarray, delta_t: float) -> np.ndarray:
+        """
+        Parameters
+        ----------
+        timestamps : np.ndarray of datetime.datetime
+        Input timestamps (order does not matter).
+        delta_t : float
+        Desired time step in seconds.
+        
+        Returns
+        -------
+        np.ndarray of datetime.datetime
+        Evenly spaced timestamps with spacing delta_t.
+        """
+        if timestamps.size == 0:
+            return np.array([], dtype=object)
+
+        # Ensure sorted timestamps
+        timestamps = np.sort(timestamps)
+
+        start = timestamps[0]
+        end = timestamps[-1]
+        
+        step = timedelta(seconds=delta_t)
+
+        result = []
+        current = start
+        while current <= end:
+            result.append(current)
+            current += step
+
+        return np.array(result, dtype=object)
 
     
     def read_dataset(self, path):
@@ -156,6 +253,7 @@ class SolcastDataset():
                              tilt:float=np.deg2rad(35),
                              azimuth:float=np.deg2rad(180),
                              W:float|None=None,
+                             P_mod_STC:float=40,
                              show_plot:bool=False,
                              time:np.array=None):
         incidence = self.compute_angle_of_incidence(solar_zenith,
@@ -164,7 +262,7 @@ class SolcastDataset():
                                                     azimuth)
         G_AL = self.compute_angular_losses(incidence, G)
         T_mod = self.compute_module_temperature(G_AL, T_amb, W=W)
-        real_p = self.compute_real_power_output(G_AL, T_mod)
+        real_p = self.compute_real_power_output(G_AL, T_mod, P_mod_STC=P_mod_STC)
 
         if show_plot:
             fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
@@ -214,27 +312,25 @@ class SolcastDataset():
         return real_p
 
 
-    def retrieve_useful_data(self, date):
+    def retrieve_data(self, date, data_type:Literal["zenith", "azimuth", "gti", "air_temp", "wind"]):
+        """ Retrieve the request data for the given date.
+
+        Keyword arguments:
+        date -- the date for which to retrieve data for.
+        """
         if date not in self.dates:
             raise ValueError(f"Date {date} is not in the dataset")
         data = self.get_data_by_date(date)
-        solar_zenith = []
-        solar_azimuth = []
-        gti = []
-        T_amb = []
+        res = []
         for t in data:
-            solar_zenith.append(np.deg2rad(t["zenith"]))
-            solar_azimuth.append(np.deg2rad(t["azimuth"]))
-            gti.append(t["gti"])
-            T_amb.append(t["air_temp"])
-        solar_zenith = np.array(solar_zenith)
-        solar_azimuth = np.array(solar_azimuth)
-        gti = np.array(gti)
-        T_amb = np.array(T_amb)
+            if data_type in ["zenith", "azimuth"]:
+                res.append(np.deg2rad(t[data_type]))
+            else:
+                res.append(t[data_type])
 
         time = np.array([datetime.fromisoformat(d["period_end"]) for d in data])
 
-        return solar_zenith, solar_azimuth, gti, T_amb, time
+        return res, time
 
 
     def plot_gti(self, date:datetime.date):
@@ -266,8 +362,14 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     
     dataset = "./solcast_dataset_202408_sassari.json"
-    solcast = SolcastDataset(dataset)
+    solcast = SolcastDataset(dataset, dt=60)
 
+    for ts, gtis, power_outputs in solcast:
+        print(f"{ts.shape=}")
+        print(f"{gtis.shape=}")
+        print(f"{power_outputs.shape=}")
+
+    """
     solcast.plot_gti(solcast.dates[10])
 
     solar_zenith, solar_azimuth, gti, T_amb, x = solcast.retrieve_useful_data(solcast.dates[10])
@@ -311,6 +413,7 @@ if __name__ == "__main__":
     fig.autofmt_xdate()
     plt.show()
 
+    
     real_p = solcast.compute_power_output(G=gti,
                                           T_amb=T_amb,
                                           solar_zenith=solar_zenith,
@@ -321,7 +424,6 @@ if __name__ == "__main__":
     soc_history = []
 
     dt = (x[1]-x[0]).total_seconds() / 3600
-    print(f"{dt=}")
         
     battery = Battery()
     for p_solar in real_p:
@@ -330,7 +432,7 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(12, 6))
     
-    plt.subplot(1, 2, 2)
+    plt.subplot()
     plt.plot(x, soc_history, color='green')
     plt.title("Battery State of Charge (%)")
     plt.xlabel("Hours")
@@ -338,3 +440,74 @@ if __name__ == "__main__":
 
     plt.tight_layout()
     plt.show()
+    """
+
+    """
+    gtis = []
+    real_ps = []
+    soc_histories = []
+    for date in solcast.dates:
+        if date.day == 1 or date.day == 31:
+            continue
+
+        solar_zenith, _ = solcast.retrieve_data(date, "zenith")
+        solar_azimuth, _ = solcast.retrieve_data(date, "azimuth")
+        gti, _ = solcast.retrieve_data(date, "gti")
+        T_amb, x = solcast.retrieve_data(date, "air_temp")
+
+        real_p = solcast.compute_power_output(G=gti,
+                                              T_amb=T_amb,
+                                              solar_zenith=solar_zenith,
+                                              solar_azimuth=solar_azimuth,
+                                              show_plot=False)
+        gtis.append(gti)
+        real_ps.append(real_p)
+        soc_history = []
+        
+        dt = (x[1]-x[0]).total_seconds() / 3600
+        
+        battery = Battery()
+        for p_solar in real_p:
+            battery.recharge_battery(p_solar, dt)
+            soc_history.append(battery.soc * 100)
+
+        soc_histories.append(soc_history)
+
+    gtis = np.array(gtis)
+    real_ps = np.array(real_ps)
+    soc_histories = np.array(soc_histories)
+
+    gtis_mean = gtis.mean(axis=0)
+    gtis_std = gtis.std(axis=0)
+
+    real_ps_mean = real_ps.mean(axis=0)
+    real_ps_std = real_ps.std(axis=0)
+
+    soc_histories_mean = soc_histories.mean(axis=0)
+    soc_histories_std = soc_histories.std(axis=0)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
+    line1, = ax1.plot(x, gtis_mean, label="GTI")
+    ax1.set_xlabel("Time (HH:MM)")
+    ax1.set_ylabel("W/m^2")
+    ax1.fill_between(x, gtis_mean - gtis_std, gtis_mean + gtis_std, alpha=0.3)
+    ax1_2 = ax1.twinx()
+    line2, = ax1_2.plot(x, real_ps_mean, linestyle="--", label="Power Output")
+    ax1_2.set_ylabel("W")
+    ax1_2.fill_between(x, real_ps_mean - real_ps_std, real_ps_mean + real_ps_std, alpha=0.3)
+            
+    lines = [line1, line2]
+    labels = [line.get_label() for line in lines]
+    ax1.legend(lines, labels)
+    
+    ax2.plot(x, soc_histories_mean, label="State of Charge")
+    ax2.set_xlabel("Time (HH:MM)")
+    ax2.set_ylabel("%")
+    ax2.fill_between(x, soc_histories_mean - soc_histories_std, soc_histories_mean + soc_histories_std, alpha=0.3)
+    ax2.legend()
+
+    fig.autofmt_xdate()
+    plt.show()
+
+    """

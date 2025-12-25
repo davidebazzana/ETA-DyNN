@@ -7,6 +7,7 @@ from environment_aware_task_allocation.utils import daily_solar_irradiance
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from summary_plot import SummaryPlot
+from solcast_dataset import SolcastDataset
 import numpy as np
 
 def retrieve_returned_by(returned_by_e0,
@@ -39,10 +40,17 @@ class SimulationPlot():
         returned_by = retrieve_returned_by(returned_by_e0,
                                            returned_by_e1,
                                            returned_by_vit4v)
+
+        dataset = "./solcast_dataset_202408_sassari.json"
+        self.solcast = SolcastDataset(dataset)
+        
+        solar_zenith, solar_azimuth, self.solar_irradiance, T_amb, x = self.solcast.retrieve_useful_data(self.solcast.dates[10])
+        
         
         self.agent = Agent(returned_by = returned_by,
                            answers = global_answers,
                            labels = labels,
+                           solar_irradiance=self.solar_irradiance,
                            max_battery=50,
                            max_memory=50,
                            initial_battery=25,
@@ -102,7 +110,10 @@ class SimulationPlot():
             
             self.t_data.append(t)
 
-            self.ax_irradiance.plot(self.t_data, [daily_solar_irradiance(t_i) for t_i in self.t_data], '-')
+            print(f"{self.t_data}")
+            print(f"{self.solar_irradiance.shape}")
+            solar_irradiance = np.array(self.solar_irradiance[:t+1])
+            self.ax_irradiance.plot(self.t_data, solar_irradiance, '-')
             self.ax_irradiance.set_xlabel("time step")
             self.ax_irradiance.set_ylabel("W/m²")
 
