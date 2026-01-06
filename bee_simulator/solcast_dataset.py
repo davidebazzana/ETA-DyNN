@@ -19,15 +19,17 @@ class SolcastDataset():
         self.dates = self.get_dates()
 
         gtis = []
+        ghis = []
         power_outputs = []
         timestamps = []
         for date in self.dates:
             solar_zenith, _ = self.retrieve_data(date, "zenith")
             solar_azimuth, _ = self.retrieve_data(date, "azimuth")
             gti, _ = self.retrieve_data(date, "gti")
+            ghi, _ = self.retrieve_data(date, "ghi")
             T_amb, ts = self.retrieve_data(date, "air_temp")
 
-            if len(gti) != 288:
+            if len(gti) != 288 or len(ghi) != 288:
                 """Check if the date has a valid number of data points."""
                 continue
             
@@ -37,9 +39,11 @@ class SolcastDataset():
                                                solar_azimuth=solar_azimuth,
                                                P_mod_STC=P_mod_STC)
             gtis.append(gti)
+            ghis.append(ghi)
             power_outputs.append(real_p)
             timestamps.append(ts)
         self.gtis = np.array(gtis)
+        self.ghis = np.array(ghis)
         self.power_outputs = np.array(power_outputs)
         self.timestamps = np.array(timestamps)
 
@@ -49,18 +53,22 @@ class SolcastDataset():
         resampled_timestamps = np.array(resampled_timestamps)
 
         resampled_gtis = []
+        resampled_ghis = []
         resampled_power_outputs = []
-        for new_day, gtis, power_outputs, timestamps in zip(resampled_timestamps, self.gtis, self.power_outputs, self.timestamps):
+        for new_day, gtis, ghis, power_outputs, timestamps in zip(resampled_timestamps, self.gtis, self.ghis, self.power_outputs, self.timestamps):
             new_day = np.linspace(0, 1, len(new_day))
             timestamps = np.linspace(0, 1, len(timestamps))
             resampled_gtis.append(np.interp(new_day, timestamps, gtis))
+            resampled_ghis.append(np.interp(new_day, timestamps, ghis))
             resampled_power_outputs.append(np.interp(new_day, timestamps, power_outputs))
         resampled_gtis = np.array(resampled_gtis)
+        resampled_ghis = np.array(resampled_ghis)
         resampled_power_outputs = np.array(resampled_power_outputs)
 
         self.day = 0
         self.timestamps = resampled_timestamps
         self.gtis = resampled_gtis
+        self.ghis = resampled_ghis
         self.power_outputs = resampled_power_outputs
 
     
@@ -74,9 +82,15 @@ class SolcastDataset():
             raise StopIteration
         ts = self.timestamps[self.day]
         gtis = self.gtis[self.day]
+        ghis = self.ghis[self.day]
         power_outputs = self.power_outputs[self.day]
         self.day += 1
-        return ts, gtis, power_outputs
+        return {
+            "timestamps": ts,
+            "gtis": gtis,
+            "ghis": ghis,
+            "power_outputs": power_outputs
+        }
 
     def resample_datetimes(self, timestamps: np.ndarray, delta_t: float) -> np.ndarray:
         """

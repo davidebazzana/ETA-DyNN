@@ -100,6 +100,7 @@ class SummaryPlot():
         # saving_performance = baseline_cost - (exit_0_cost + exit_1_cost + vit4v_cost)
         complete_costs_vector = (exit_0_cost + exit_1_cost + vit4v_cost)
 
+        print(f"{p_metric} {phase}:\n{np.mean(exit_0_cost[exit_0_cost!=0])=}\n{np.mean(exit_1_cost[exit_1_cost!=0])=}\n{np.mean(vit4v_cost[vit4v_cost!=0])=}")
         """
         if p_metric == "tot_energy" and phase == "inference":
             print(f"[TEST AFTER] duration\nBASELINE: {baseline_cost}\nEXIT 0: {exit_0_cost}\nEXIT 1: {exit_1_cost}\nViT4V: {vit4v_cost}")

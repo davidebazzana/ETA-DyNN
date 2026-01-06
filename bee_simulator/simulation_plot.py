@@ -1,8 +1,13 @@
+import sys
 import cProfile
 import pstats
 from pstats import SortKey
 import time
-from environment_aware_task_allocation.functions import Agent
+from environment_aware_task_allocation.agent import Agent
+from environment_aware_task_allocation.data import Dataset
+from environment_aware_task_allocation.battery import Battery
+from environment_aware_task_allocation.memory import Memory
+from environment_aware_task_allocation.experiment import Experiment
 from environment_aware_task_allocation.utils import daily_solar_irradiance
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -36,54 +41,112 @@ class SimulationPlot():
                        returned_by_e1,
                        returned_by_vit4v,
                        global_answers,
-                       labels):
+                       vit4v_answers,
+                       labels,
+                       dt:int=10):
         returned_by = retrieve_returned_by(returned_by_e0,
                                            returned_by_e1,
                                            returned_by_vit4v)
 
         dataset = "./solcast_dataset_202408_sassari.json"
-        self.solcast = SolcastDataset(dataset)
+        solcast = SolcastDataset(dataset,
+                                 dt=dt)
         
-        solar_zenith, solar_azimuth, self.solar_irradiance, T_amb, x = self.solcast.retrieve_useful_data(self.solcast.dates[10])
-        
-        
-        self.agent = Agent(returned_by = returned_by,
-                           answers = global_answers,
-                           labels = labels,
-                           solar_irradiance=self.solar_irradiance,
-                           max_battery=50,
-                           max_memory=50,
-                           initial_battery=25,
-                           initial_memory=0,
-                           n_stages = 2,
-                           stage_energy_cost=0.25, # 0.1,
-                           delegation_energy_cost=0.1, # 0.05,
-                           gamma_s_1=0.7,
-                           gamma_s_2=0.3,
-                           gamma_d_1=0.9,
-                           gamma_d_2=0.2)
-        
-        self.t_data = []
+        dataset = Dataset(returned_by, global_answers, vit4v_answers, labels)
+        self.experiment = Experiment(dataset=dataset,
+                                     solcast=solcast,
+                                     battery_capacity=100,
+                                     memory_capacity=10000000,
+                                     initial_soc=0.8,
+                                     dt=dt,
+                                     future_time_window=5,
+                                     stage_energy_cost=0.25,
+                                     delegation_energy_cost=0.1)
 
+        ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, accuracy_logs, precision_logs, recall_logs, f1_score_logs, battery_logs, memory_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
+        print(f"{bsi=}")
+        print(f"{ere=}")
+        print(f"{pdm=}")
+        print(f"{hm=}")
+
+        gtis_logs_mean, gtis_logs_std = self.get_mean_std(gtis_logs)
+        power_outputs_logs_mean, power_outputs_logs_std = self.get_mean_std(power_outputs_logs)
+        recovery_state_logs_mean, recovery_state_logs_std = self.get_mean_std(recovery_state_logs)
+        returned_by_logs_0_mean, returned_by_logs_0_std = self.get_mean_std(returned_by_logs[0])
+        returned_by_logs_1_mean, returned_by_logs_1_std = self.get_mean_std(returned_by_logs[1])
+        returned_by_logs_2_mean, returned_by_logs_2_std = self.get_mean_std(returned_by_logs[2])
+        returned_by_none_logs_mean, returned_by_none_logs_std = self.get_mean_std(returned_by_none_logs)
+        accuracy_logs_mean = self.get_classification_performance_mean(accuracy_logs)
+        precision_logs_mean = self.get_classification_performance_mean(precision_logs)
+        recall_logs_mean = self.get_classification_performance_mean(recall_logs)
+        f1_score_logs_mean = self.get_classification_performance_mean(f1_score_logs)
+        battery_logs_mean, battery_logs_std = self.get_mean_std(battery_logs)
+        memory_logs_mean, memory_logs_std = self.get_mean_std(memory_logs)
+        egress_rate_logs_mean, egress_rate_logs_std = self.get_mean_std(egress_rate_logs)
+        new_tasks_logs_mean, new_tasks_logs_std = self.get_mean_std(new_tasks_logs)
+        dropped_tasks_logs_mean, dropped_tasks_logs_std = self.get_mean_std(dropped_tasks_logs)
+        print(f"{len(returned_by_logs_0_mean)=}")
+        print(f"{len(gtis_logs_mean)=}")
+        
         self.ax_irradiance.clear()
         self.ax_performance.clear()
         self.ax_returned_by.clear()
         self.ax_classification_performance.clear()
         
-        self.ax_irradiance.plot(self.t_data, [], '-')
+        self.ax_irradiance.plot(ts, gtis_logs_mean, 'b-', label="GTI")
+        self.ax_irradiance.fill_between(ts,
+                                        gtis_logs_mean - gtis_logs_std,
+                                        gtis_logs_mean + gtis_logs_std,
+                                        alpha=0.3)
         self.ax_irradiance.set_xlabel("time step")
         self.ax_irradiance.set_ylabel("W/m²")
-        
-        memory_line, = self.ax_performance.plot(self.t_data, [], '-', label='memory')
-        battery_line, = self.ax_performance.plot(self.t_data, [], '-', label='battery')
 
-        self.ax_returned_by.stackplot(self.t_data, [], [], [], labels=['returned by exit 0', 'returned by exit 1', 'returned by vit4v'])
-        
-        accuracy_line, = self.ax_classification_performance.plot(self.t_data, [], '-', label='accuracy')
-        precision_line, = self.ax_classification_performance.plot(self.t_data, [], '-', label='precision')
-        recall_line, = self.ax_classification_performance.plot(self.t_data, [], '-', label='recall')
-        f1_score_line, = self.ax_classification_performance.plot(self.t_data, [], '-', label='f1-score')
+        self.ax_egress_rate = self.ax_irradiance.twinx()
+        self.ax_egress_rate.plot(ts, egress_rate_logs_mean, "r-", label="Egress rate")
+        self.ax_egress_rate.set_ylabel('cnt/min')
+        self.ax_egress_rate.tick_params(axis='y')
 
+        memory_line, = self.ax_performance.plot(ts, memory_logs_mean, '-', label='memory')
+        self.ax_performance.fill_between(ts,
+                                         memory_logs_mean - memory_logs_std,
+                                         memory_logs_mean + memory_logs_std,
+                                         alpha=0.3)
+        battery_line, = self.ax_performance.plot(ts, battery_logs_mean, '-', label='battery')
+        self.ax_performance.fill_between(ts,
+                                         battery_logs_mean - battery_logs_std,
+                                         battery_logs_mean + battery_logs_std,
+                                         alpha=0.3)
+        
+        self.ax_returned_by.stackplot(ts,
+                                      returned_by_logs_0_mean,
+                                      returned_by_logs_1_mean,
+                                      returned_by_logs_2_mean,
+                                      dropped_tasks_logs_mean,
+                                      labels=['returned by exit 0', 'returned by exit 1', 'returned by vit4v', 'dropped'])
+        
+        accuracy_line, = self.ax_classification_performance.plot(ts, accuracy_logs_mean, '-', label='accuracy')
+        precision_line, = self.ax_classification_performance.plot(ts, precision_logs_mean, '-', label='precision')
+        recall_line, = self.ax_classification_performance.plot(ts, recall_logs_mean, '-', label='recall')
+        f1_score_line, = self.ax_classification_performance.plot(ts, f1_score_logs_mean, '-', label='f1-score')
+        """
+        self.ax_classification_performance.fill_between(ts,
+                                                        [max(m - accuracy_logs_std[idx], 0) for idx, m in enumerate(accuracy_logs_mean)],
+                                                        [min(m + accuracy_logs_std[idx], 1) for idx, m in enumerate(accuracy_logs_mean)],
+                                                        alpha=0.3)
+        self.ax_classification_performance.fill_between(ts,
+                                                        [max(m - precision_logs_std[idx], 0) for idx, m in enumerate(precision_logs_mean)],
+                                                        [min(m + precision_logs_std[idx], 1) for idx, m in enumerate(precision_logs_mean)],
+                                                        alpha=0.3)
+        self.ax_classification_performance.fill_between(ts,
+                                                        [max(m - recall_logs_std[idx], 0) for idx, m in enumerate(recall_logs_mean)],
+                                                        [min(m + recall_logs_std[idx], 1) for idx, m in enumerate(recall_logs_mean)],
+                                                        alpha=0.3)
+        self.ax_classification_performance.fill_between(ts,
+                                                        [max(m - f1_score_logs_std[idx], 0) for idx, m in enumerate(f1_score_logs_mean)],
+                                                        [min(m + f1_score_logs_std[idx], 1) for idx, m in enumerate(f1_score_logs_mean)],
+                                                        alpha=0.3)
+        """
+        
         self.agent_lines = {'memory_log': memory_line,
                             'battery_log': battery_line,
                             'accuracy_log': accuracy_line,
@@ -100,26 +163,49 @@ class SimulationPlot():
         self.ax_classification_performance.legend(loc='best', frameon=False)
         self.ax_classification_performance.autoscale()
 
-        self.t_data.append(0)
+        self.fig.canvas.draw_idle()
 
-        self.agent_it = iter(self.agent)
-        
+    def get_mean_std(self, data):
+        data_mean = data.mean(axis=0)
+        data_std = data.std(axis=0)
+
+        return data_mean, data_std
+
+    def get_classification_performance_mean(self, data):
+        # Remove all rows where all the elements are -1
+        d = np.copy(data)
+        means = np.array([])
+        res = np.full(d.shape[1], np.nan)
+
+        while np.sum(d != -1) > 0:
+            cond = d == -1
+            n_cols = d.shape[1]
+            I = np.ones((n_cols, 1))
+            cond = cond @ I < n_cols
+            d = d[cond.squeeze(), :]
+
+            cond = d == -1
+            n_rows = d.shape[0]
+            I = np.ones(n_rows)
+            cond = I @ cond != 0
+            mean = d[:, ~cond].mean(axis=0)
+            means = np.insert(means, 0, mean)
+            d = d[:, cond]
+    
+        res[-len(means):] = means
+        return res
+    
     def update_state(self):
         try:
-            t = next(self.agent)
+            data = next(self.experiment)
             
-            self.t_data.append(t)
+            self.ax_irradiance.plot(data["timestamps"], data["power_outputs"], '-')
+            self.ax_irradiance.set_xlabel("Time (HH:MM)")
+            self.ax_irradiance.set_ylabel("W")
 
-            print(f"{self.t_data}")
-            print(f"{self.solar_irradiance.shape}")
-            solar_irradiance = np.array(self.solar_irradiance[:t+1])
-            self.ax_irradiance.plot(self.t_data, solar_irradiance, '-')
-            self.ax_irradiance.set_xlabel("time step")
-            self.ax_irradiance.set_ylabel("W/m²")
-
-            self.update_stackplot()
+            self.update_stackplot(data)
             for attr, line in self.agent_lines.items():
-                line.set_xdata(self.t_data)
+                line.set_xdata(ts)
                 data = getattr(self.agent, attr)
                 line.set_ydata(data)
             self.ax_classification_performance.relim()
@@ -132,11 +218,11 @@ class SimulationPlot():
         except StopIteration:
             pass
 
-    def update_stackplot(self):
+    def update_stackplot(self, data):
         self.ax_returned_by.cla()
-        self.ax_returned_by.stackplot(self.t_data,
-                                      self.agent.returned_by_log[0],
-                                      self.agent.returned_by_log[1],
-                                      self.agent.returned_by_log[2],
+        self.ax_returned_by.stackplot(data["timestamps"],
+                                      self.experiment.agent.returned_by_log[0],
+                                      self.experiment.agent.returned_by_log[1],
+                                      self.experiment.agent.returned_by_log[2],
                                       labels=['returned by exit 0', 'returned by exit 1', 'returned by vit4v'])
         self.ax_returned_by.legend()
