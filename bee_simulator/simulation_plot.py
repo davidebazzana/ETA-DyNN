@@ -48,26 +48,36 @@ class SimulationPlot():
                                            returned_by_e1,
                                            returned_by_vit4v)
 
+        print(f"{len(labels)=}")
+        print(f"Infested: {sum(labels)}, Free: {len(labels) - sum(labels)}")
+
         dataset = "./solcast_dataset_202408_sassari.json"
         solcast = SolcastDataset(dataset,
-                                 dt=dt)
+                                 dt=dt,
+                                 P_mod_STC=125)
         
         dataset = Dataset(returned_by, global_answers, vit4v_answers, labels)
         self.experiment = Experiment(dataset=dataset,
                                      solcast=solcast,
-                                     battery_capacity=100,
-                                     memory_capacity=10000000,
-                                     initial_soc=0.8,
+                                     battery_capacity=200,
+                                     memory_capacity=5000,
+                                     initial_soc=0.4,
                                      dt=dt,
-                                     future_time_window=5,
-                                     stage_energy_cost=0.25,
-                                     delegation_energy_cost=0.1)
+                                     future_time_window=360,
+                                     stage_energy_cost=0.25, # 0.25
+                                     delegation_energy_cost=0.1, # 0.1
+                                     idle_energy_cost=0.01, # 0.01
+                                     force_delegation=True)
 
-        ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, accuracy_logs, precision_logs, recall_logs, f1_score_logs, battery_logs, memory_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
+        ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, battery_logs, memory_logs, decisions_logs, discount_logs, stage_cost_logs, delegation_cost_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
         print(f"{bsi=}")
         print(f"{ere=}")
         print(f"{pdm=}")
         print(f"{hm=}")
+
+        print(f"{np.sum(decisions_logs == -1)=}")
+        print(f"{np.sum(decisions_logs == 0)=}")
+        print(f"{np.sum(decisions_logs == 1)=}")
 
         gtis_logs_mean, gtis_logs_std = self.get_mean_std(gtis_logs)
         power_outputs_logs_mean, power_outputs_logs_std = self.get_mean_std(power_outputs_logs)
@@ -76,17 +86,14 @@ class SimulationPlot():
         returned_by_logs_1_mean, returned_by_logs_1_std = self.get_mean_std(returned_by_logs[1])
         returned_by_logs_2_mean, returned_by_logs_2_std = self.get_mean_std(returned_by_logs[2])
         returned_by_none_logs_mean, returned_by_none_logs_std = self.get_mean_std(returned_by_none_logs)
-        accuracy_logs_mean = self.get_classification_performance_mean(accuracy_logs)
-        precision_logs_mean = self.get_classification_performance_mean(precision_logs)
-        recall_logs_mean = self.get_classification_performance_mean(recall_logs)
-        f1_score_logs_mean = self.get_classification_performance_mean(f1_score_logs)
         battery_logs_mean, battery_logs_std = self.get_mean_std(battery_logs)
         memory_logs_mean, memory_logs_std = self.get_mean_std(memory_logs)
         egress_rate_logs_mean, egress_rate_logs_std = self.get_mean_std(egress_rate_logs)
         new_tasks_logs_mean, new_tasks_logs_std = self.get_mean_std(new_tasks_logs)
         dropped_tasks_logs_mean, dropped_tasks_logs_std = self.get_mean_std(dropped_tasks_logs)
-        print(f"{len(returned_by_logs_0_mean)=}")
-        print(f"{len(gtis_logs_mean)=}")
+        discount_logs_mean, discount_logs_std = self.get_mean_std(discount_logs)
+        stage_cost_logs_mean, stage_cost_logs_std = self.get_mean_std(stage_cost_logs)
+        delegation_cost_logs_mean, delegation_cost_logs_std = self.get_mean_std(delegation_cost_logs)
         
         self.ax_irradiance.clear()
         self.ax_performance.clear()
@@ -123,11 +130,16 @@ class SimulationPlot():
                                       returned_by_logs_2_mean,
                                       dropped_tasks_logs_mean,
                                       labels=['returned by exit 0', 'returned by exit 1', 'returned by vit4v', 'dropped'])
-        
+
+        self.ax_classification_performance.plot(ts, discount_logs_mean, '-', label='discount')
+        self.ax_classification_performance.plot(ts, stage_cost_logs_mean, '-', label='stage_cost')
+        self.ax_classification_performance.plot(ts, delegation_cost_logs_mean, '-', label='delegation_cost')
+        """
         accuracy_line, = self.ax_classification_performance.plot(ts, accuracy_logs_mean, '-', label='accuracy')
         precision_line, = self.ax_classification_performance.plot(ts, precision_logs_mean, '-', label='precision')
         recall_line, = self.ax_classification_performance.plot(ts, recall_logs_mean, '-', label='recall')
         f1_score_line, = self.ax_classification_performance.plot(ts, f1_score_logs_mean, '-', label='f1-score')
+        """
         """
         self.ax_classification_performance.fill_between(ts,
                                                         [max(m - accuracy_logs_std[idx], 0) for idx, m in enumerate(accuracy_logs_mean)],
@@ -146,14 +158,16 @@ class SimulationPlot():
                                                         [min(m + f1_score_logs_std[idx], 1) for idx, m in enumerate(f1_score_logs_mean)],
                                                         alpha=0.3)
         """
-        
+
+        """
         self.agent_lines = {'memory_log': memory_line,
                             'battery_log': battery_line,
                             'accuracy_log': accuracy_line,
                             'precision_log': precision_line,
                             'recall_log': recall_line,
                             'f1_score_log': f1_score_line}
-
+        """
+        
         self.ax_performance.legend(loc='best', frameon=False)
         self.ax_performance.autoscale()
         
