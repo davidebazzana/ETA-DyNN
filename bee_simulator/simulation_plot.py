@@ -1,3 +1,4 @@
+import pickle
 import sys
 import cProfile
 import pstats
@@ -14,6 +15,11 @@ import matplotlib.gridspec as gridspec
 from summary_plot import SummaryPlot
 from solcast_dataset import SolcastDataset
 import numpy as np
+from scipy.stats import randint
+from sklearn.model_selection import RandomizedSearchCV
+import numpy as np
+from tqdm import tqdm
+
 
 def retrieve_returned_by(returned_by_e0,
                          returned_by_e1,
@@ -50,24 +56,65 @@ class SimulationPlot():
 
         print(f"{len(labels)=}")
         print(f"Infested: {sum(labels)}, Free: {len(labels) - sum(labels)}")
-
-        dataset = "./solcast_dataset_202408_sassari.json"
-        solcast = SolcastDataset(dataset,
-                                 dt=dt,
-                                 P_mod_STC=125)
         
         dataset = Dataset(returned_by, global_answers, vit4v_answers, labels)
+        # Write answers dataset to file
+        with open("experiment_samples_dataset.pkl", "wb") as f:
+            pickle.dump(dataset, f)
+
+        n = 2
+        module_powers = np.linspace(20, 200, n, dtype=int)
+        battery_capacities = np.linspace(50, 500, n, dtype=int)
+        memory_capacities = np.linspace(500, 5000, n, dtype=int)
+
+        print(f"{module_powers=}")
+        print(f"{battery_capacities=}")
+        print(f"{memory_capacities=}")
+
+        data = []
+        for p in tqdm(module_powers):
+            for b in battery_capacities:
+                for m in memory_capacities:
+                    solcast_dataset_path = "./solcast_dataset_202408_sassari.json"
+                    solcast = SolcastDataset(solcast_dataset_path,
+                                             dt=dt,
+                                             P_mod_STC=p) # 125
+        
+                    self.experiment = Experiment(dataset=dataset,
+                                                 solcast=solcast,
+                                                 battery_capacity=b, # 200
+                                                 memory_capacity=m, #5000
+                                                 initial_soc=0.5,
+                                                 dt=dt,
+                                                 future_time_window=360,
+                                                 stage_energy_cost=0.25, # 0.25
+                                                 delegation_energy_cost=0.1, # 0.1
+                                                 idle_energy_cost=0.01, # 0.01
+                                                 force_delegation=False)
+
+                    ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, battery_logs, memory_logs, decisions_logs, discount_logs, stage_cost_logs, delegation_cost_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
+                    data.append(np.array([p, b, m, bsi, ere, pdm, hm, dropped_tasks_logs[0][-1]]))
+        data = np.array(data)
+        print(f"{data=}")
+        with open("simulation_data.pkl", "wb") as f:
+            pickle.dump(data, f)
+                    
+        solcast_dataset_path = "./solcast_dataset_202408_sassari.json"
+        solcast = SolcastDataset(solcast_dataset_path,
+                                 dt=dt,
+                                 P_mod_STC=10) # 125
+        
         self.experiment = Experiment(dataset=dataset,
                                      solcast=solcast,
-                                     battery_capacity=200,
-                                     memory_capacity=5000,
-                                     initial_soc=0.4,
+                                     battery_capacity=20, #200
+                                     memory_capacity=5000, #5000
+                                     initial_soc=0.5,
                                      dt=dt,
                                      future_time_window=360,
                                      stage_energy_cost=0.25, # 0.25
                                      delegation_energy_cost=0.1, # 0.1
                                      idle_energy_cost=0.01, # 0.01
-                                     force_delegation=True)
+                                     force_delegation=False)
 
         ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, battery_logs, memory_logs, decisions_logs, discount_logs, stage_cost_logs, delegation_cost_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
         print(f"{bsi=}")
@@ -78,6 +125,8 @@ class SimulationPlot():
         print(f"{np.sum(decisions_logs == -1)=}")
         print(f"{np.sum(decisions_logs == 0)=}")
         print(f"{np.sum(decisions_logs == 1)=}")
+
+        print(f"{dropped_tasks_logs[0][-1]=}")
 
         gtis_logs_mean, gtis_logs_std = self.get_mean_std(gtis_logs)
         power_outputs_logs_mean, power_outputs_logs_std = self.get_mean_std(power_outputs_logs)

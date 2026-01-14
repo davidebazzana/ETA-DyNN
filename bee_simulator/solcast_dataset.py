@@ -326,7 +326,7 @@ class SolcastDataset():
         return real_p
 
 
-    def retrieve_data(self, date, data_type:Literal["zenith", "azimuth", "gti", "air_temp", "wind"]):
+    def retrieve_data(self, date, data_type:Literal["zenith", "azimuth", "ghi", "gti", "air_temp", "wind"]):
         """ Retrieve the request data for the given date.
 
         Keyword arguments:

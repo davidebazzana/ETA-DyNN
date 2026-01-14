@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import argparse
 import pickle
 import sys
@@ -7,10 +8,13 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import QFont
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from pathlib import Path
+import nevergrad as ng
+import matplotlib.pyplot as plt
 
 from confidence_plot import ConfidencePlot
 from summary_plot import SummaryPlot
 from simulation_plot import SimulationPlot
+
 
 class SummaryPlotWidget(QWidget):
     def __init__(self,
@@ -164,7 +168,11 @@ class ThresholdsWindow(QWidget):
                                                      dataset_codename)
 
         layout.addWidget(self.plot_widget_summary)
-        
+
+        self.thresholds_btn = QPushButton("Search optimal thresholds")
+        self.thresholds_btn.clicked.connect(self.search_opt_thresholds)
+        layout.addWidget(self.thresholds_btn)
+
         self.btn = QPushButton("Launch simulation")
         self.btn.clicked.connect(self.launch_simulation)
         layout.addWidget(self.btn)
@@ -194,6 +202,33 @@ class ThresholdsWindow(QWidget):
                                                       vit4v_answers,
                                                       labels)
         # self.simulation_plot_widget.start_simulation()
+
+    def search_opt_thresholds(self):
+        self.plot_widget_exit_0.cp.set_thresholds(0.1, 0.9)
+        self.plot_widget_exit_1.cp.set_thresholds(0.2, 0.8)
+
+        """
+        n = 4
+        lower_0 = np.linspace(0.01, 0.20, n)
+        upper_0 = np.linspace(0.80, 0.99, n)
+        lower_1 = np.linspace(0.01, 0.30, n)
+        upper_1 = np.linspace(0.70, 0.99, n)
+
+        data = []
+        for l0 in tqdm(lower_0):
+            for u0 in upper_0:
+                for l1 in lower_1:
+                    for u1 in upper_1:
+                        self.plot_widget_exit_0.cp.set_thresholds(l0, u0)
+                        self.plot_widget_exit_1.cp.set_thresholds(l1, u1)
+                        saving = ((self.plot_widget_summary.sp.costs["tot_energy"]["baseline"]["total"] - self.plot_widget_summary.sp.costs["tot_energy"]["system"]["total"])/self.plot_widget_summary.sp.costs["tot_energy"]["baseline"]["total"])*100
+                        
+                        data.append(np.array([l0, u0, l1, u1, saving]))
+        data = np.array(data)
+
+        with open("data.pkl", "wb") as f:
+            pickle.dump(data, f)
+        """
 
     def close_panels(self):
         for cp in self.confidence_panels:

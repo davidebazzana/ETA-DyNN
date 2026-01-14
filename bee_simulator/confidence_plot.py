@@ -93,6 +93,14 @@ class ConfidencePlot():
         self.update_metrics()
         self.fig.canvas.draw_idle()
 
+    def set_thresholds(self, lower_threshold, upper_threshold):
+        self.line1.set_xdata([lower_threshold, lower_threshold])
+        self.line2.set_xdata([upper_threshold, upper_threshold])
+        self.lower_threshold = self.line1.get_xdata()[0]
+        self.upper_threshold = self.line2.get_xdata()[0]
+        self.update_metrics()
+        self.fig.canvas.draw_idle()
+
     def on_release(self, event):
         """Release the selected line."""
         self.selected_line = None
@@ -145,7 +153,7 @@ class ConfidencePlot():
         labels = self.train_labels[valid_answers]
         answers[answers > self.upper_threshold] = 1
         answers[answers < self.lower_threshold] = 0
-
+        
         return labels, answers
     
     def compute_metrics(self):
@@ -170,6 +178,8 @@ class ConfidencePlot():
                     "rec": rec,
                     "f1": f1
                 }
+
+            self.valid_training_answers = len(training_labels) / len(self.train_labels)
 
         if len(answers) > 0:
             cm = confusion_matrix(labels, answers)
