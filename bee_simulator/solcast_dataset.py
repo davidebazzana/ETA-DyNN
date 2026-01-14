@@ -1,9 +1,11 @@
+from tqdm import tqdm
 from typing import Literal
 import logging
 import json
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from datetime import date as datetime_date
 from datetime import datetime, timedelta
 from environment_aware_task_allocation.battery import Battery
 
@@ -14,24 +16,78 @@ class SolcastDataset():
     def __init__(self,
                  path:str,
                  dt:float=300,
-                 P_mod_STC:float=40):
+                 P_mod_STC:float=40,
+                 ref_day:datetime_date=datetime_date(2024,8,2)):
         self.data = self.read_dataset(path)
         self.dates = self.get_dates()
+        self.ref_day = ref_day
 
+        self.valid_dates = []
+        self.interesting_dates = []
         gtis = []
         ghis = []
         power_outputs = []
         timestamps = []
-        for date in self.dates:
+
+        for date in tqdm(self.dates, desc=f"Scanning the entire dataset {path}"):
+            gti, _ = self.retrieve_data(date, "gti")
+            ghi, _ = self.retrieve_data(date, "ghi")
+
+            if len(gti) != 288 or len(ghi) != 288:
+                """Check if the date has a valid number of data points."""
+                continue
+
+            self.valid_dates.append(date)
+
+        correlations = []
+        for date in self.valid_dates:
+            correlation = self.correlation(date)
+            print(f"{date} correlation to {self.ref_day}: {correlation}")
+
+            correlations.append((correlation, date))
+        n_min = 10
+        min_correlation_dates = sorted(correlations, key=lambda x: x[0])[:n_min]
+
+        plot_correlations = False
+        if plot_correlations:
+            correlations = np.array(correlations)
+            highlight_indexes = [10, 50, 70, 150, 250, 322]
+
+            plt.scatter(
+                [correlations[:, 1][i] for i in highlight_indexes],  # x-values to highlight
+                [correlations[:, 0][i] for i in highlight_indexes],  # y-values to highlight
+                s=100,          # size of the circle
+                facecolors='none',  # hollow circle
+                edgecolors='red',   # circle color
+                linewidths=1.5,     # thickness of circle
+                label='Highlighted'
+            )
+        
+            plt.plot(correlations[:, 1], correlations[:, 0],
+                     color='green',
+                     marker='o',
+                     linestyle='',
+                     markersize=5)
+
+            plt.xlabel("Date")
+            plt.ylabel(f"GHI Correlation with {self.ref_day}")
+
+            # plt.ylim(0, 1)
+            plt.grid(True, which='both', linestyle='--', linewidth=0.7, alpha=0.7)
+            
+            plt.legend()
+            
+            plt.show()
+
+        day_of_interest = 1
+        for correlation, date in min_correlation_dates[day_of_interest:day_of_interest+1]:
+            print(f"DATE: {date}, correlation with {self.ref_day}: {correlation}")
+            self.interesting_dates.append(date)
             solar_zenith, _ = self.retrieve_data(date, "zenith")
             solar_azimuth, _ = self.retrieve_data(date, "azimuth")
             gti, _ = self.retrieve_data(date, "gti")
             ghi, _ = self.retrieve_data(date, "ghi")
             T_amb, ts = self.retrieve_data(date, "air_temp")
-
-            if len(gti) != 288 or len(ghi) != 288:
-                """Check if the date has a valid number of data points."""
-                continue
             
             real_p = self.compute_power_output(G=gti,
                                                T_amb=T_amb,
@@ -80,18 +136,33 @@ class SolcastDataset():
     def __next__(self):
         if self.day == len(self.timestamps):
             raise StopIteration
+        day = self.interesting_dates[self.day]
         ts = self.timestamps[self.day]
         gtis = self.gtis[self.day]
         ghis = self.ghis[self.day]
         power_outputs = self.power_outputs[self.day]
         self.day += 1
         return {
+            "date": day,
             "timestamps": ts,
             "gtis": gtis,
             "ghis": ghis,
             "power_outputs": power_outputs
         }
 
+    def _correlation(self, sig1:np.array, sig2:np.array):
+        assert len(sig1) == len(sig2), f"The two signals have different lengths: {len(sig1)}, {len(sig2)}"
+
+        return np.sum(sig1 * sig2)
+
+    def correlation(self, day:np.array):
+        ref_ghi, _ = self.retrieve_data(self.ref_day, "ghi")
+        other_ghi, _ = self.retrieve_data(day, "ghi")
+        ref_ghi = np.array(ref_ghi)
+        other_ghi = np.array(other_ghi)
+        
+        return self._correlation(ref_ghi, other_ghi) / np.sqrt(self._correlation(ref_ghi, ref_ghi) * self._correlation(other_ghi, other_ghi))
+    
     def resample_datetimes(self, timestamps: np.ndarray, delta_t: float) -> np.ndarray:
         """
         Parameters
@@ -375,13 +446,10 @@ class SolcastDataset():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     
-    dataset = "./solcast_dataset_202408_sassari.json"
-    solcast = SolcastDataset(dataset, dt=60)
-
-    for ts, gtis, power_outputs in solcast:
-        print(f"{ts.shape=}")
-        print(f"{gtis.shape=}")
-        print(f"{power_outputs.shape=}")
+    dataset = "./solcast_2024_sassari.json" # "./solcast_dataset_202408_sassari.json"
+    solcast = SolcastDataset(path=dataset,
+                             dt=10,
+                             P_mod_STC=220)
 
     """
     solcast.plot_gti(solcast.dates[10])

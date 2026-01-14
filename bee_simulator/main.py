@@ -207,28 +207,29 @@ class ThresholdsWindow(QWidget):
         self.plot_widget_exit_0.cp.set_thresholds(0.1, 0.9)
         self.plot_widget_exit_1.cp.set_thresholds(0.2, 0.8)
 
-        """
-        n = 4
-        lower_0 = np.linspace(0.01, 0.20, n)
-        upper_0 = np.linspace(0.80, 0.99, n)
-        lower_1 = np.linspace(0.01, 0.30, n)
-        upper_1 = np.linspace(0.70, 0.99, n)
+        search = False
+        if search:
+            n = 4
+            lower_0 = np.linspace(0.01, 0.20, n)
+            upper_0 = np.linspace(0.80, 0.99, n)
+            lower_1 = np.linspace(0.01, 0.30, n)
+            upper_1 = np.linspace(0.70, 0.99, n)
 
-        data = []
-        for l0 in tqdm(lower_0):
-            for u0 in upper_0:
-                for l1 in lower_1:
-                    for u1 in upper_1:
-                        self.plot_widget_exit_0.cp.set_thresholds(l0, u0)
-                        self.plot_widget_exit_1.cp.set_thresholds(l1, u1)
-                        saving = ((self.plot_widget_summary.sp.costs["tot_energy"]["baseline"]["total"] - self.plot_widget_summary.sp.costs["tot_energy"]["system"]["total"])/self.plot_widget_summary.sp.costs["tot_energy"]["baseline"]["total"])*100
-                        
-                        data.append(np.array([l0, u0, l1, u1, saving]))
-        data = np.array(data)
+            data = []
+            for l0 in tqdm(lower_0):
+                for u0 in upper_0:
+                    for l1 in lower_1:
+                        for u1 in upper_1:
+                            self.plot_widget_exit_0.cp.set_thresholds(l0, u0)
+                            self.plot_widget_exit_1.cp.set_thresholds(l1, u1)
+                            saving = ((self.plot_widget_summary.sp.costs["tot_energy"]["baseline"]["total"] - self.plot_widget_summary.sp.costs["tot_energy"]["system"]["total"])/self.plot_widget_summary.sp.costs["tot_energy"]["baseline"]["total"])*100
+                            acc = self.plot_widget_summary.sp.metrics["acc"]
+                            data.append(np.array([l0, u0, l1, u1, saving, acc]))
+            data = np.array(data)
 
-        with open("data.pkl", "wb") as f:
-            pickle.dump(data, f)
-        """
+            with open("data.pkl", "wb") as f:
+                pickle.dump(data, f)
+        
 
     def close_panels(self):
         for cp in self.confidence_panels:
@@ -244,6 +245,10 @@ class SimulationWindow(QWidget):
 
         self.simulation_plot_widget = SimulationPlotWidget(thresholds_window)
         layout.addWidget(self.simulation_plot_widget)
+
+        save_btn = QPushButton("Save Plots")
+        save_btn.clicked.connect(self.save_plots)
+        layout.addWidget(save_btn)
         
         btn = QPushButton("Quit Simulation")
         btn.clicked.connect(self.back_to_thresholds_window)
@@ -253,6 +258,9 @@ class SimulationWindow(QWidget):
     def back_to_thresholds_window(self):
         # self.simulation_plot_widget.stop_simulation()
         self.stacked_widget.setCurrentIndex(0)
+
+    def save_plots(self):
+        self.simulation_plot_widget.sp.save_plots()
         
 class MainWindow(QStackedWidget):
     def __init__(self, threshold_data_path, db_path, experiment_codename, dataset_codename):

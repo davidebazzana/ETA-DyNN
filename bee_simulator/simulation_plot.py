@@ -62,51 +62,79 @@ class SimulationPlot():
         with open("experiment_samples_dataset.pkl", "wb") as f:
             pickle.dump(dataset, f)
 
-        n = 2
-        module_powers = np.linspace(20, 200, n, dtype=int)
-        battery_capacities = np.linspace(50, 500, n, dtype=int)
-        memory_capacities = np.linspace(500, 5000, n, dtype=int)
+        search_opt_hardware = False
 
-        print(f"{module_powers=}")
-        print(f"{battery_capacities=}")
-        print(f"{memory_capacities=}")
+        if search_opt_hardware:
+            n = 8
+            module_powers = np.linspace(10, 500, n, dtype=int)
+            battery_capacities = np.linspace(10, 500, n, dtype=int)
+            memory_capacities = np.linspace(100, 10_000, n, dtype=int)
 
-        data = []
-        for p in tqdm(module_powers):
-            for b in battery_capacities:
-                for m in memory_capacities:
-                    solcast_dataset_path = "./solcast_dataset_202408_sassari.json"
-                    solcast = SolcastDataset(solcast_dataset_path,
-                                             dt=dt,
-                                             P_mod_STC=p) # 125
-        
-                    self.experiment = Experiment(dataset=dataset,
-                                                 solcast=solcast,
-                                                 battery_capacity=b, # 200
-                                                 memory_capacity=m, #5000
-                                                 initial_soc=0.5,
+            print(f"{module_powers=}")
+            print(f"{battery_capacities=}")
+            print(f"{memory_capacities=}")
+
+            data = []
+            for p in tqdm(module_powers):
+                for b in battery_capacities:
+                    for m in memory_capacities:
+                        solcast_dataset_path = "./solcast_dataset_202408_sassari.json"
+                        solcast = SolcastDataset(solcast_dataset_path,
                                                  dt=dt,
-                                                 future_time_window=360,
-                                                 stage_energy_cost=0.25, # 0.25
-                                                 delegation_energy_cost=0.1, # 0.1
-                                                 idle_energy_cost=0.01, # 0.01
-                                                 force_delegation=False)
+                                                 P_mod_STC=p) # 125
+        
+                        self.experiment = Experiment(dataset=dataset,
+                                                     solcast=solcast,
+                                                     battery_capacity=b, # 200
+                                                     memory_capacity=m, #5000
+                                                     initial_soc=0.5,
+                                                     dt=dt,
+                                                     future_time_window=360,
+                                                     stage_energy_cost=0.25, # 0.25
+                                                     delegation_energy_cost=0.1, # 0.1
+                                                     idle_energy_cost=0.01, # 0.01
+                                                     force_delegation=False)
 
-                    ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, battery_logs, memory_logs, decisions_logs, discount_logs, stage_cost_logs, delegation_cost_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
-                    data.append(np.array([p, b, m, bsi, ere, pdm, hm, dropped_tasks_logs[0][-1]]))
-        data = np.array(data)
-        print(f"{data=}")
-        with open("simulation_data.pkl", "wb") as f:
-            pickle.dump(data, f)
-                    
-        solcast_dataset_path = "./solcast_dataset_202408_sassari.json"
+                        ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, battery_logs, memory_logs, decisions_logs, discount_logs, stage_cost_logs, delegation_cost_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
+                        data.append(np.array([p, b, m, bsi, ere, pdm, hm, dropped_tasks_logs[0][-1]]))
+            data = np.array(data)
+            print(f"{data=}")
+            with open("simulation_data.pkl", "wb") as f:
+                pickle.dump(data, f)
+
+        compare_performance = False
+
+        if compare_performance:
+            solcast_dataset_path = "./solcast_dataset_202408_sassari.json"
+            solcast = SolcastDataset(solcast_dataset_path,
+                                     dt=dt,
+                                     P_mod_STC=p) # 125
+            
+            self.experiment = Experiment(dataset=dataset,
+                                         solcast=solcast,
+                                         battery_capacity=b, # 200
+                                         memory_capacity=m, #5000
+                                         initial_soc=0.5,
+                                         dt=dt,
+                                         future_time_window=360,
+                                         stage_energy_cost=0.25, # 0.25
+                                         delegation_energy_cost=0.1, # 0.1
+                                         idle_energy_cost=0.01, # 0.01
+                                         force_delegation=False)
+
+            ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, battery_logs, memory_logs, decisions_logs, discount_logs, stage_cost_logs, delegation_cost_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
+
+            with open("simulation_data.pkl", "wb") as f:
+                pickle.dump(data, f)
+        
+        solcast_dataset_path = "./solcast_2024_sassari.json" # "./solcast_dataset_202408_sassari.json"
         solcast = SolcastDataset(solcast_dataset_path,
                                  dt=dt,
-                                 P_mod_STC=10) # 125
+                                 P_mod_STC=220) # 125
         
         self.experiment = Experiment(dataset=dataset,
                                      solcast=solcast,
-                                     battery_capacity=20, #200
+                                     battery_capacity=200, #200
                                      memory_capacity=5000, #5000
                                      initial_soc=0.5,
                                      dt=dt,
@@ -289,3 +317,6 @@ class SimulationPlot():
                                       self.experiment.agent.returned_by_log[2],
                                       labels=['returned by exit 0', 'returned by exit 1', 'returned by vit4v'])
         self.ax_returned_by.legend()
+        
+    def save_plots(self):
+        self.fig.savefig("simulation_plot_results.pdf", format='pdf', bbox_inches='tight')
