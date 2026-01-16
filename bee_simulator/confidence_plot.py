@@ -27,6 +27,8 @@ class ConfidencePlot():
         self.returned = np.zeros_like(self.labels, dtype=bool)
         self.curr_returned = np.zeros_like(self.labels, dtype=bool)
         self.complete_answers = None
+
+        self.exit_idx = exit_idx
         
         self.prev_pred = prev_pred
         self.next_pred = next_pred
@@ -180,6 +182,7 @@ class ConfidencePlot():
                 }
 
             self.valid_training_answers = len(training_labels) / len(self.train_labels)
+            print(f"Exit {self.exit_idx}: {self.valid_training_answers=}")
 
         if len(answers) > 0:
             cm = confusion_matrix(labels, answers)

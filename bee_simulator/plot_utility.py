@@ -31,7 +31,9 @@ def thresholds_plot():
     for i, (key, group) in enumerate(groups.items()):
         X = group[:, 2]  # Lower Threshold
         Y = group[:, 3]  # Upper Threshold
-        Z = group[:, 5]  # Total energy savings %
+        Z = group[:, 4]  # Total energy savings %
+
+        print(f"Key {key}: min={min(Z)}, max={max(Z)}")
 
         # Create a grid for surface
         xi = np.linspace(X.min(), X.max(), 30)
@@ -99,7 +101,7 @@ def simulation_plot():
     for i, (key, group) in enumerate(groups.items()):
         X = group[:,  1]  # PV peak power
         Y = group[:,  2]  # Battery
-        Z = group[:,  3]  # HM
+        Z = group[:,  6]  # HM
 
         # Create a grid for surface
         xi = np.linspace(X.min(), X.max(), 30)
@@ -153,5 +155,5 @@ def simulation_plot():
 
     
 if __name__ == "__main__":
-    thresholds_plot()
-    # simulation_plot()
+    # thresholds_plot()
+    simulation_plot()
