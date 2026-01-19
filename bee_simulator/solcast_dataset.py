@@ -18,7 +18,7 @@ class SolcastDataset():
                  dt:float=300,
                  P_mod_STC:float=40,
                  ref_day:datetime_date=datetime_date(2024,8,2),
-                 plot_correlation:bool=False):
+                 compute_ghi_correlation:bool=False):
         self.data = self.read_dataset(path)
         self.dates = self.get_dates()
         self.ref_day = ref_day
@@ -30,7 +30,7 @@ class SolcastDataset():
         power_outputs = []
         timestamps = []
 
-        for date in tqdm(self.dates, desc=f"Scanning the entire dataset {path}"):
+        for date in tqdm(self.dates, desc=f"Scanning the dataset {path}"):
             gti, _ = self.retrieve_data(date, "gti")
             ghi, _ = self.retrieve_data(date, "ghi")
 
@@ -40,60 +40,11 @@ class SolcastDataset():
 
             self.valid_dates.append(date)
 
-        correlations = []
-        highlight_indexes = []
-        for idx, date in enumerate(self.valid_dates):
-            correlation = self.correlation(date)
-            print(f"{date} correlation to {self.ref_day}: {correlation}")
-
-            correlations.append((correlation, date))
-
-            if (date == datetime_date(2024,3,3) or
-                date == datetime_date(2024,11,5) or
-                date == datetime_date(2024,8,14) or
-                date == datetime_date(2024,8,2)):
-                highlight_indexes.append(idx)
-        n_min = 10
-        min_correlation_dates = sorted(correlations, key=lambda x: x[0])[:n_min]
-
-        sorted_correlations = sorted(correlations, key=lambda x: x[0])
-        mean_correlation_date = sorted_correlations[len(sorted_correlations)//2]
-        highest_correlation_date = sorted_correlations[-2]
-        ref_day_date = sorted_correlations[-1]
-
-        if plot_correlation:
-            correlations = np.array(correlations)
-
-            plt.scatter(
-                [correlations[:, 1][i] for i in highlight_indexes],  # x-values to highlight
-                [correlations[:, 0][i] for i in highlight_indexes],  # y-values to highlight
-                s=100,          # size of the circle
-                facecolors='none',  # hollow circle
-                edgecolors='red',   # circle color
-                linewidths=1.5,     # thickness of circle
-                zorder=5
-            )
+        if compute_ghi_correlation: self.compute_ghi_correlation()
         
-            plt.plot(correlations[:, 1], correlations[:, 0],
-                     color='green',
-                     marker='o',
-                     linestyle='',
-                     markersize=5,
-                     zorder=2)
-
-            plt.xlabel("Date")
-            plt.ylabel(f"GHI Correlation with {self.ref_day}")
-
-            # plt.ylim(0, 1)
-            plt.grid(True, which='both', linestyle='--', linewidth=0.7, alpha=0.7)
-            
-            plt.legend()
-            
-            plt.show()
-
         day_of_interest = 1
-        for correlation, date in min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]: # [highest_correlation_date]: # [ref_day_date]: # min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]: 
-            print(f"DATE: {date}, correlation with {self.ref_day}: {correlation}")
+        # for correlation, date in min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]: # [highest_correlation_date]: # [ref_day_date]: # min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]:
+        for date in tqdm(self.valid_dates[180:185], desc="Retrieving data"):
             self.interesting_dates.append(date)
             solar_zenith, _ = self.retrieve_data(date, "zenith")
             solar_azimuth, _ = self.retrieve_data(date, "azimuth")
@@ -174,6 +125,62 @@ class SolcastDataset():
         other_ghi = np.array(other_ghi)
         
         return self._correlation(ref_ghi, other_ghi) / np.sqrt(self._correlation(ref_ghi, ref_ghi) * self._correlation(other_ghi, other_ghi))
+
+    def compute_ghi_correlation(self, show_plot:bool=False):
+        correlations = []
+        highlight_indexes = []
+        for idx, date in enumerate(self.valid_dates):
+            correlation = self.correlation(date)
+            print(f"{date} correlation to {self.ref_day}: {correlation}")
+
+            correlations.append((correlation, date))
+
+            if (date == datetime_date(2024,3,3) or
+                date == datetime_date(2024,11,5) or
+                date == datetime_date(2024,8,14) or
+                date == datetime_date(2024,8,2)):
+                highlight_indexes.append(idx)
+        n_min = 10
+        min_correlation_dates = sorted(correlations, key=lambda x: x[0])[:n_min]
+
+        sorted_correlations = sorted(correlations, key=lambda x: x[0])
+        mean_correlation_date = sorted_correlations[len(sorted_correlations)//2]
+        highest_correlation_date = sorted_correlations[-2]
+        ref_day_date = sorted_correlations[-1]
+
+        if show_plot:
+            correlations = np.array(correlations)
+
+            plt.scatter(
+                [correlations[:, 1][i] for i in highlight_indexes],  # x-values to highlight
+                [correlations[:, 0][i] for i in highlight_indexes],  # y-values to highlight
+                s=100,          # size of the circle
+                facecolors='none',  # hollow circle
+                edgecolors='red',   # circle color
+                linewidths=1.5,     # thickness of circle
+                zorder=5
+            )
+        
+            plt.plot(correlations[:, 1], correlations[:, 0],
+                     color='green',
+                     marker='o',
+                     linestyle='',
+                     markersize=5,
+                     zorder=2)
+
+            plt.xlabel("Date")
+            plt.ylabel(f"GHI Correlation with {self.ref_day}")
+
+            # plt.ylim(0, 1)
+            plt.grid(True, which='both', linestyle='--', linewidth=0.7, alpha=0.7)
+            
+            plt.legend()
+            
+            plt.show()
+
+
+        return min_correlation_dates, mean_correlation_date, highest_correlation_date, ref_day_date
+
     
     def resample_datetimes(self, timestamps: np.ndarray, delta_t: float) -> np.ndarray:
         """

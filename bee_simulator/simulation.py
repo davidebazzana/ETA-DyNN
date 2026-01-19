@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+from datetime import date as datetime_date
 
 from solcast_dataset import SolcastDataset
 from environment_aware_task_allocation.agent import Agent
@@ -68,23 +69,43 @@ class Simulation():
             pickle.dump(data, f)
 
 
-    def launch_simulation(self):        
+    def launch_simulation(self,
+                          P_mod_STC:int,
+                          battery_initial_soc:int,
+                          battery_capacity:int,
+                          memory_capacity:int,
+                          start_date:datetime_date,
+                          end_date:datetime_date,
+                          force_delegation:bool,
+                          daily_reset:bool):
+        battery_initial_soc = battery_initial_soc / 100
+        print("======= Simulation =======")
+        print(f"{P_mod_STC=}")
+        print(f"{battery_initial_soc=}")
+        print(f"{battery_capacity=}")
+        print(f"{memory_capacity=}")
+        print(f"{start_date=}")
+        print(f"{end_date=}")
+        print(f"{force_delegation=}")
+        print(f"{daily_reset=}")
+
         solcast_dataset_path = "./solcast_2024_sassari.json" # "./solcast_dataset_202408_sassari.json"
         solcast = SolcastDataset(solcast_dataset_path,
                                  dt=self.dt,
-                                 P_mod_STC=150) # 125
+                                 P_mod_STC=P_mod_STC) # 125
         
         self.experiment = Experiment(dataset=self.dataset,
                                      solcast=solcast,
-                                     battery_capacity=400, #200
-                                     memory_capacity=4000, #5000
-                                     initial_soc=0.5,
+                                     battery_capacity=battery_capacity, #200
+                                     memory_capacity=memory_capacity, #5000
+                                     initial_soc=battery_initial_soc,
                                      dt=self.dt,
                                      future_time_window=360,
                                      stage_energy_cost=0.25, # 0.25
                                      delegation_energy_cost=0.1, # 0.1
                                      idle_energy_cost=0.01, # 0.01
-                                     force_delegation=False)
+                                     force_delegation=force_delegation,
+                                     daily_reset=daily_reset)
 
         self.data_log = self.experiment.launch()
 

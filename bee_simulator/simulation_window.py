@@ -1,8 +1,9 @@
-from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame
+import pickle
+from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QAction, QFileDialog, QMessageBox
 from PyQt5.QtCore import *
 
 from simulation_stats_widget import SimulationStatsWidget
-from simulation_params_widget import SimulationControlWidget
+from simulation_control_widget import SimulationControlWidget
 from simulation import Simulation
 
 
@@ -25,33 +26,26 @@ class SimulationWindow(QWidget):
         right_panel_layout = QVBoxLayout(right_panel)
         main_layout.addWidget(right_panel, 4)  # stretch factor = 2 (2/3)
 
-        """
-        right_layout = QVBoxLayout(right_panel)
-
-        upper_right = QFrame()
-        upper_right.setFrameShape(QFrame.StyledPanel)
-        right_layout.addWidget(upper_right, 2)  # 2/3 of right panel height
-
-        lower_right = QFrame()
-        lower_right.setFrameShape(QFrame.StyledPanel)
-        right_layout.addWidget(lower_right, 1)
-        """
-
         simulation_control_widget = SimulationControlWidget(launch_simulation_callback=self.launch_simulation,
-                                                            save_plots_callback=self.save_plots,
+                                                            save_simulation_callback=self.save_simulation,
+                                                            load_simulation_callback=self.load_simulation,
+                                                            compare_hardware_callback=self.compare_hardware,
                                                             quit_callback=self.quit_simulation)
-        left_panel_layout.addWidget(simulation_control_widget, alignment=Qt.AlignHCenter | Qt.AlignVCenter)
+        left_panel_layout.addWidget(simulation_control_widget, alignment=Qt.AlignHCenter)
 
-        self.simulation_stats_widget = SimulationStatsWidget()
+        self.simulation_stats_widget = SimulationStatsWidget(save_plots_callback=self.save_plots)
         # self.simulation_stats_widget.setMaximumWidth(1600)
         # layout.addWidget(self.simulation_stats_widget, alignment=Qt.AlignHCenter)
-        right_panel_layout.addWidget(self.simulation_stats_widget, alignment=Qt.AlignHCenter | Qt.AlignVCenter)
+        right_panel_layout.addWidget(self.simulation_stats_widget, alignment=Qt.AlignHCenter)
 
+        self.simulation_data_results = None
         # layout.addWidget(simulation_control_widget)
         
+    def compare_hardware(self):
+        self.simulation.compare_hardware()
 
-    def launch_simulation(self):
-        self.simulation.launch_simulation()
+    def launch_simulation(self, simulation_params):
+        self.simulation.launch_simulation(**simulation_params)
         
     def quit_simulation(self):
         self.stacked_widget.setCurrentIndex(0)
@@ -63,4 +57,42 @@ class SimulationWindow(QWidget):
         self.simulation_stats_widget.sp.save_plots()
 
     def end_of_simulation(self, data):
-        self.simulation_stats_widget.sp.plot(**data)
+        self.simulation_data_results = data
+        self.simulation_stats_widget.update_stats(self.simulation_data_results)
+
+    def load_simulation(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Simulation Results",
+            "",
+            "Pickle Files (*.pkl);;All Files (*)"
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "rb") as f:
+                self.simulation_data_results = pickle.load(f)
+            print("Loaded:", path)
+            self.simulation_stats_widget.update_stats(self.simulation_data_results)
+        except Exception as e:
+            QMessageBox.critical(self, "Load Error", str(e))
+
+    def save_simulation(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Simulation Results",
+            "",
+            "Pickle Files (*.pkl);;All Files (*)"
+        )
+        if not path:
+            return
+
+        if not path.endswith(".pkl"):
+            path += ".pkl"
+
+        try:
+            with open(path, "wb") as f:
+                pickle.dump(self.simulation_data_results, f)
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", str(e))

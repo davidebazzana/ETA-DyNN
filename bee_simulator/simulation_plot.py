@@ -28,12 +28,12 @@ class SimulationPlot():
         gs = gridspec.GridSpec(2, 2)
 
         self.ax_irradiance = self.fig.add_subplot(gs[:, 0])
+        self.ax_egress_rate = self.ax_irradiance.twinx()
         self.ax_returned_by = self.fig.add_subplot(gs[0, 1])
         # self.ax_classification_performance = self.fig.add_subplot(gs[1, 1])
         self.ax_performance = self.fig.add_subplot(gs[1, 1])
 
     def plot(self,
-             classification,
              ts,
              gtis_logs,
              power_outputs_logs,
@@ -49,32 +49,16 @@ class SimulationPlot():
              egress_rate_logs,
              new_tasks_logs,
              dropped_tasks_logs,
-             bsi,
-             ere,
-             pdm,
-             hm,
-             energy_del,
-             energy_dem,
-             energy_harv):
+             energy_del_logs,
+             energy_dem_logs,
+             energy_harv_logs):
+
         print("==============================")
-        print(f"{classification['acc']=}, {classification['prec']=}, {classification['rec']=}, {classification['f1']=}")
+        # print(f"{classification['acc']=}, {classification['prec']=}, {classification['rec']=}, {classification['f1']=}")
         print(f"No decision (either m=0 or recovery state): {np.sum(decisions_logs == -1)}")
         print(f"Decisions to delegate: {np.sum(decisions_logs ==  0)}")
         print(f"Decisions to compute locally: {np.sum(decisions_logs ==  1)}")
-        print(f"{energy_del=}, {energy_dem=}, {energy_harv=}")
-        print(f"{bsi=}, {ere=}, {pdm=}, {hm=}")
         print("==============================")
-        
-        print(f"{bsi=}")
-        print(f"{ere=}")
-        print(f"{pdm=}")
-        print(f"{hm=}")
-
-        print(f"{np.sum(decisions_logs == -1)=}")
-        print(f"{np.sum(decisions_logs == 0)=}")
-        print(f"{np.sum(decisions_logs == 1)=}")
-
-        print(f"{dropped_tasks_logs[0][-1]=}")
 
         gtis_logs_mean, gtis_logs_std = self.get_mean_std(gtis_logs)
         power_outputs_logs_mean, power_outputs_logs_std = self.get_mean_std(power_outputs_logs)
@@ -93,6 +77,7 @@ class SimulationPlot():
         delegation_cost_logs_mean, delegation_cost_logs_std = self.get_mean_std(delegation_cost_logs)
 
         self.ax_irradiance.clear()
+        self.ax_egress_rate.clear()
         self.ax_performance.clear()
         self.ax_returned_by.clear()
         # self.ax_classification_performance.clear()
@@ -105,10 +90,17 @@ class SimulationPlot():
         self.ax_irradiance.set_xlabel("Time (HH:MM)")
         self.ax_irradiance.set_ylabel("W/m²")
 
-        self.ax_egress_rate = self.ax_irradiance.twinx()
         self.ax_egress_rate.plot(ts, egress_rate_logs_mean, "r-", label="Egress rate")
         self.ax_egress_rate.set_ylabel('cnt/min')
         self.ax_egress_rate.tick_params(axis='y')
+
+        irradiance_lines, irradiance_labels = self.ax_irradiance.get_legend_handles_labels()
+        egress_rate_lines, egress_rate_labels = self.ax_egress_rate.get_legend_handles_labels()       
+        self.ax_irradiance.legend(
+            irradiance_lines + egress_rate_lines,
+            irradiance_labels + egress_rate_labels,
+            loc="best"
+        )
 
         memory_line, = self.ax_performance.plot(ts, memory_logs_mean, '-', label='Memory Usage')
         self.ax_performance.fill_between(ts,
