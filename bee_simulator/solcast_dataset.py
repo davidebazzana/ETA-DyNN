@@ -18,7 +18,8 @@ class SolcastDataset():
                  dt:float=300,
                  P_mod_STC:float=40,
                  ref_day:datetime_date=datetime_date(2024,8,2),
-                 compute_ghi_correlation:bool=False):
+                 compute_ghi_correlation:bool=False,
+                 partition:str="validation"):
         self.data = self.read_dataset(path)
         self.dates = self.get_dates()
         self.ref_day = ref_day
@@ -41,10 +42,19 @@ class SolcastDataset():
             self.valid_dates.append(date)
 
         if compute_ghi_correlation: self.compute_ghi_correlation()
-        
-        day_of_interest = 1
+
+        train_idx, validation_idx = self.split_indices(total_length=len(self.valid_dates),
+                                                       block_size=14)
+        self.valid_dates = np.array(self.valid_dates)
+        if partition == "validation":
+            self.valid_dates = self.valid_dates[validation_idx]
+        elif partition == "train":
+            self.valid_dates = self.valid_dates[train_idx]
+        else:
+            raise RuntimeError(f"{partition} is not a valid partition")
+        # day_of_interest = 1
         # for correlation, date in min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]: # [highest_correlation_date]: # [ref_day_date]: # min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]:
-        for date in tqdm(self.valid_dates[180:185], desc="Retrieving data"):
+        for date in tqdm(self.valid_dates, desc="Retrieving data"):
             self.interesting_dates.append(date)
             solar_zenith, _ = self.retrieve_data(date, "zenith")
             solar_azimuth, _ = self.retrieve_data(date, "azimuth")
@@ -112,6 +122,41 @@ class SolcastDataset():
             "ghis": ghis,
             "power_outputs": power_outputs
         }
+
+    def split_indices(self, total_length, block_size, val_fraction=0.8, seed=None):
+        """
+        Split indices from 0 to total_length-1 into non-overlapping blocks of size block_size.
+    
+        Args:
+        total_length (int): Total number of indices (e.g., 363).
+        block_size (int): Size of each contiguous block.
+        val_fraction (float): Fraction of blocks to use for validation.
+        seed (int, optional): Random seed for reproducibility.
+
+        Returns:
+        train_idx (np.ndarray): Array of training indices.
+        validation_idx (np.ndarray): Array of validation indices.
+        """
+        if seed is not None:
+            np.randnom.seed(seed)
+            
+        # Create blocks of contiguous indices
+        blocks = [np.arange(i, min(i + block_size, total_length)) 
+                  for i in range(0, total_length, block_size)]
+    
+        # Shuffle the blocks
+        np.random.shuffle(blocks)
+    
+        # Split into train and validation
+        n_val = int(len(blocks) * val_fraction)
+        val_blocks = blocks[:n_val]
+        train_blocks = blocks[n_val:]
+    
+        # Flatten the lists of blocks
+        train_idx = np.concatenate(train_blocks)
+        validation_idx = np.concatenate(val_blocks)
+    
+        return train_idx, validation_idx
 
     def _correlation(self, sig1:np.array, sig2:np.array):
         assert len(sig1) == len(sig2), f"The two signals have different lengths: {len(sig1)}, {len(sig2)}"

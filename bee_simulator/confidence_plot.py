@@ -125,6 +125,7 @@ class ConfidencePlot():
                     sample_answers.append(0)
                 elif pred > self.upper_threshold:
                     sample_answers.append(1)
+            
             if len(sample_answers) > 0:
                 # Majority voting heuristic
                 # answers.append(int(sum(sample_answers)/len(sample_answers) > 0.5))

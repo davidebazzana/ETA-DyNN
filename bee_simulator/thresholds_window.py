@@ -156,6 +156,7 @@ class ThresholdsWindow(QWidget):
 
     def get_classification_data(self):
         data = {
+            'scores': self.plot_widget_summary.sp.scores,
             'returned_by_e0': np.copy(self.plot_widget_summary.sp.returned_by_e0),
             'returned_by_e1': np.copy(self.plot_widget_summary.sp.returned_by_e1),
             'returned_by_vit4v': np.copy(self.plot_widget_summary.sp.returned_by_vit4v),

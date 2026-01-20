@@ -46,6 +46,23 @@ class SummaryPlot():
                                                          dataset_codename,
                                                          "vit4v"))
 
+        exit_0_scores = self.db.get_scores(experiment_codename,
+                                           dataset_codename,
+                                           "ee_cnn",
+                                           0)
+        exit_1_scores = self.db.get_scores(experiment_codename,
+                                           dataset_codename,
+                                           "ee_cnn",
+                                           1)
+        vit4v_scores = self.db.get_scores(experiment_codename,
+                                          dataset_codename,
+                                          "vit4v")
+        self.scores = {
+            "exit_0": exit_0_scores,
+            "exit_1": exit_1_scores,
+            "vit4v": vit4v_scores
+        }
+
         self.cp_e0 = confidence_plot_exit_0
         self.cp_e1 = confidence_plot_exit_1
         self.cp_e0.set_final_plot(self)
