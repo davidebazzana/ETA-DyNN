@@ -14,6 +14,8 @@ from environment_aware_task_allocation.memory import Memory
 from environment_aware_task_allocation.experiment import Experiment
 from environment_aware_task_allocation.utils import daily_solar_irradiance
 
+from hardware_comparison_db_utils import insert_experiment
+
 
 def launch_simulation_worker(args):
     cls, init_soc, p, b, m = args
@@ -28,10 +30,11 @@ def launch_simulation_worker(args):
         daily_reset=False,
         solcast_partition="train"
     )
+
     return {
-        "P_mod_STC": p,
-        "battery": b,
-        "memory": m,
+        "P_mod_STC": int(p),
+        "battery": int(b),
+        "memory": int(m),
         "results": result
     }
 
@@ -66,82 +69,29 @@ class Simulation():
             
     def compare_hardware(self,
                          battery_initial_soc:float=0.5):
-        """
-        n = 8
-        module_powers = np.linspace(80, 500, n, dtype=int)
-        battery_capacities = np.linspace(50, 500, n, dtype=int)
-        memory_capacities = np.linspace(1000, 5_000, n, dtype=int)
-
-        data = []
-        for p in tqdm(module_powers):
-            for b in battery_capacities:
-                for m in memory_capacities:
-                    solcast_dataset_path = "./solcast_dataset_202408_sassari.json"
-                    solcast = SolcastDataset(solcast_dataset_path,
-                                             dt=self.dt,
-                                             P_mod_STC=p) # 125
-        
-                    self.experiment = Experiment(dataset=self.dataset,
-                                                 solcast=solcast,
-                                                 battery_capacity=b, # 200
-                                                 memory_capacity=m, #5000
-                                                 initial_soc=0.5,
-                                                 dt=self.dt,
-                                                 future_time_window=360,
-                                                 stage_energy_cost=0.25, # 0.25
-                                                 delegation_energy_cost=0.1, # 0.1
-                                                 idle_energy_cost=0.01, # 0.01
-                                                 force_delegation=False)
-
-                    ts, gtis_logs, power_outputs_logs, recovery_state_logs, returned_by_logs, returned_by_none_logs, battery_logs, memory_logs, decisions_logs, discount_logs, stage_cost_logs, delegation_cost_logs, egress_rate_logs, new_tasks_logs, dropped_tasks_logs, bsi, ere, pdm, hm = self.experiment.launch()
-                    data.append(np.array([p, b, m, bsi, ere, pdm, hm, dropped_tasks_logs[0][-1]]))
-        data = np.array(data)
-        print(f"{data=}")
-        with open("simulation_data.pkl", "wb") as f:
-            pickle.dump(data, f)
-        """
-        n = 8
+        n = 4
         init_soc = 50
-        module_powers = np.linspace(80, 500, n, dtype=int)
-        battery_capacities = np.linspace(50, 500, n, dtype=int)
-        memory_capacities = np.linspace(1000, 5_000, n, dtype=int)
+        module_powers = np.linspace(20, 500, n, dtype=int)
+        battery_capacities = np.linspace(20, 500, n, dtype=int)
+        memory_capacities = np.linspace(20, 5_000, n, dtype=int)
 
         tasks = [(self, init_soc, p, b, m) for p, b, m in itertools.product(module_powers, battery_capacities, memory_capacities)]
-        
+
         results = []
         with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-            for r in executor.map(launch_simulation_worker, tasks):
-                results.append(r)
-        """
-        data = []
-        for p in tqdm(module_powers):
-            for b in battery_capacities:
-                for m in memory_capacities:
-                    result = self.launch_simulation(P_mod_STC=p,
-                                                    battery_initial_soc=0.5,
-                                                    battery_capacity=b,
-                                                    memory_capacity=m,
-                                                    start_date=datetime_date.today(),
-                                                    end_date=datetime_date.today(),
-                                                    force_delegation=False,
-                                                    daily_reset=False)
-                    data.append({
-                        "P_mod_STC": p,
-                        "battery": b,
-                        "memory": m,
-                        "results": result
-                    })
-        """
-        with open("hardware_comparison_results.pkl", "wb") as f:
+            for res in executor.map(launch_simulation_worker, tasks):
+                results.append(res)
+                print(f"[ProcessPoolExecutor] {len(results)=}")
+        
+        with open("hardware_comparison_results_3.pkl", "wb") as f:
             pickle.dump(results, f)
+        
 
     def launch_simulation(self,
                           P_mod_STC:int,
                           battery_initial_soc:int,
                           battery_capacity:int,
                           memory_capacity:int,
-                          start_date:datetime_date,
-                          end_date:datetime_date,
                           force_delegation:bool,
                           daily_reset:bool,
                           end_callback=None,

@@ -59,20 +59,7 @@ class SimulationControlWidget(QWidget):
         self.memory_capacity_input.setMaximum(10**9)
         self.memory_capacity_input.setValue(2000)
         self.memory_capacity_input.setMaximumWidth(140)
-
-        time_label = QLabel("Time Interval")
-        time_label.setFont(form_labels_font)
         
-        self.start_date = QDateEdit()
-        self.start_date.setCalendarPopup(True)
-        self.start_date.setDate(QDate(2024, 1, 1))
-        self.start_date.setMaximumWidth(140)
-
-        self.end_date = QDateEdit()
-        self.end_date.setCalendarPopup(True)
-        self.end_date.setDate(QDate(2024, 12, 31))
-        self.end_date.setMaximumWidth(140)
-
         spacer = QSpacerItem(
             0, 15,
             QSizePolicy.Minimum,
@@ -93,10 +80,6 @@ class SimulationControlWidget(QWidget):
         sim_params_form_layout.addRow("Battery initial SOC:", self.battery_initial_soc_input)
         sim_params_form_layout.addRow("Battery capacity:", self.battery_capacity_input)
         sim_params_form_layout.addRow("Memory capacity:", self.memory_capacity_input)
-        sim_params_form_layout.addItem(spacer)
-        sim_params_form_layout.addRow(time_label)
-        sim_params_form_layout.addRow("Start date:", self.start_date)
-        sim_params_form_layout.addRow("End date:", self.end_date)
         sim_params_form_layout.addItem(spacer)
         sim_params_form_layout.addRow(system_label)
         sim_params_form_layout.addRow("Force delegation:", self.force_delegation_checkbox)
@@ -150,8 +133,6 @@ class SimulationControlWidget(QWidget):
             "battery_initial_soc": self.battery_initial_soc_input.value(),
             "battery_capacity": self.battery_capacity_input.value(),
             "memory_capacity": self.memory_capacity_input.value(),
-            "start_date": self.start_date.date().toPyDate(),
-            "end_date": self.end_date.date().toPyDate(),
             "force_delegation": self.force_delegation_checkbox.isChecked(),
             "daily_reset": self.daily_reset_checkbox.isChecked()
         })

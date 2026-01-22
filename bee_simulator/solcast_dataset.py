@@ -43,17 +43,10 @@ class SolcastDataset():
 
         if compute_ghi_correlation: self.compute_ghi_correlation()
 
-        train_idx, validation_idx = self.split_indices(total_length=len(self.valid_dates),
-                                                       block_size=14)
         self.valid_dates = np.array(self.valid_dates)
-        if partition == "validation":
-            self.valid_dates = self.valid_dates[validation_idx]
-        elif partition == "train":
-            self.valid_dates = self.valid_dates[train_idx]
-        else:
-            raise RuntimeError(f"{partition} is not a valid partition")
-        # day_of_interest = 1
-        # for correlation, date in min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]: # [highest_correlation_date]: # [ref_day_date]: # min_correlation_dates[day_of_interest:day_of_interest+1]: # [mean_correlation_date]:
+        if partition == "train":
+            self.valid_dates = self.valid_dates[181.188]
+
         for date in tqdm(self.valid_dates, desc="Retrieving data"):
             self.interesting_dates.append(date)
             solar_zenith, _ = self.retrieve_data(date, "zenith")

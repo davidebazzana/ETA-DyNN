@@ -76,6 +76,11 @@ class SimulationPlot():
         stage_cost_logs_mean, stage_cost_logs_std = self.get_mean_std(stage_cost_logs)
         delegation_cost_logs_mean, delegation_cost_logs_std = self.get_mean_std(delegation_cost_logs)
 
+        print(f"{battery_logs=}")
+        within_opt_range = (battery_logs > 0.4) & (battery_logs < 0.8)
+        perc_within_opt_range = np.sum(within_opt_range) / battery_logs.size
+        print(f"{perc_within_opt_range=}")
+
         self.ax_irradiance.clear()
         self.ax_egress_rate.clear()
         self.ax_performance.clear()
@@ -114,7 +119,11 @@ class SimulationPlot():
                                          alpha=0.3)
         self.ax_performance.set_xlabel("Time (HH:MM)")
         self.ax_performance.set_ylabel("Normalized")
-        
+
+        tot_returned_mean = returned_by_logs_0_mean[-1] + returned_by_logs_1_mean[-1] + returned_by_logs_2_mean[-1]
+        perc_returned_by_vit4v = (returned_by_logs_2_mean[-1] / tot_returned_mean) * 100
+        print(f"{tot_returned_mean=}")
+        print(f"{perc_returned_by_vit4v=}")
         self.ax_returned_by.stackplot(ts,
                                       returned_by_logs_0_mean,
                                       returned_by_logs_1_mean,

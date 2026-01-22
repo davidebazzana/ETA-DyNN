@@ -172,8 +172,8 @@ class ThresholdsWindow(QWidget):
         self.stacked_widget.setCurrentIndex(1)
 
     def set_thresholds(self):
-        self.plot_widget_exit_0.cp.set_thresholds(0.1, 0.9) # (0.1, 0.9)
-        self.plot_widget_exit_1.cp.set_thresholds(0.2, 0.8) # (0.2, 0.8)
+        self.plot_widget_exit_0.cp.set_thresholds(0.1, 0.9)
+        self.plot_widget_exit_1.cp.set_thresholds(0.2, 0.8)
 
     def compare_thresholds(self):
         n = 4

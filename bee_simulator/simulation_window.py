@@ -45,7 +45,9 @@ class SimulationWindow(QWidget):
         self.simulation.compare_hardware()
 
     def launch_simulation(self, simulation_params):
-        self.simulation.launch_simulation(**simulation_params, end_callback=self.end_of_simulation)
+        self.simulation.launch_simulation(**simulation_params,
+                                          end_callback=self.end_of_simulation,
+                                          solcast_partition="validation")
         
     def quit_simulation(self):
         self.stacked_widget.setCurrentIndex(0)

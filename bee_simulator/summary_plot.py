@@ -18,6 +18,7 @@ class SummaryPlot():
                                                      dataset_codename,
                                                      "ee_cnn",
                                                      0)
+        # print(f"{performance_exit_0['inference']=}")
         performance_exit_1 = self.db.get_performance(experiment_codename,
                                                      dataset_codename,
                                                      "ee_cnn",
@@ -92,6 +93,17 @@ class SummaryPlot():
         self.e0_answers = self.cp_e0.complete_answers
         self.e1_answers = self.cp_e1.complete_answers
 
+        e0_valid = self.e0_answers != -1
+        e1_valid = self.e1_answers != -1
+        both_valid = np.logical_and(e0_valid, e1_valid)
+        print(f"{self.e0_answers=}")
+        print(f"{self.e1_answers=}")
+        print(f"{e0_valid=}")
+        print(f"{e1_valid=}")
+        print(f"{both_valid=}")
+        same_answer = self.e0_answers[both_valid] == self.e1_answers[both_valid]
+        print(f"{np.sum(same_answer)=}, {len(same_answer)}")
+
         self.global_answers = np.zeros_like(self.vit4v_answers)
         self.global_answers[self.returned_by_e0] = self.e0_answers[self.returned_by_e0]
         self.global_answers[self.returned_by_e1] = self.e1_answers[self.returned_by_e1]
@@ -105,6 +117,7 @@ class SummaryPlot():
             "gpu_energy": 3,
             "ram_energy": 4
         }
+        # print(f'{phase=}, {p_metric=}, {np.mean(self.energy_performance["ee_cnn"]["exit_0"][phase][:,p_idx[p_metric]])=}')
         baseline_cost = np.copy(self.energy_performance["vit4v"][phase][:,p_idx[p_metric]])
         exit_0_cost = np.copy(self.energy_performance["ee_cnn"]["exit_0"][phase][:,p_idx[p_metric]])
         exit_1_cost = np.copy(self.energy_performance["ee_cnn"]["exit_1"][phase][:,p_idx[p_metric]])
