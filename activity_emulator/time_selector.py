@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (
+xcfrom PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QComboBox,
     QGridLayout, QVBoxLayout, QDateEdit
 )
