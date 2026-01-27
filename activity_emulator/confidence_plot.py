@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
-from experiments_db import EXPERIMENTS_DB
+from ee_cnn.experiments_db import EXPERIMENTS_DB
 
 class ConfidencePlot():
     def __init__(self,

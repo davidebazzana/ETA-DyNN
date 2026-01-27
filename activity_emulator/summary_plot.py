@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
-from experiments_db import EXPERIMENTS_DB
+from ee_cnn.experiments_db import EXPERIMENTS_DB
 from confidence_plot import ConfidencePlot
 
 class SummaryPlot():
@@ -93,19 +93,6 @@ class SummaryPlot():
         self.e0_answers = self.cp_e0.complete_answers
         self.e1_answers = self.cp_e1.complete_answers
 
-        """
-        e0_valid = self.e0_answers != -1
-        e1_valid = self.e1_answers != -1
-        both_valid = np.logical_and(e0_valid, e1_valid)
-        print(f"{self.e0_answers=}")
-        print(f"{self.e1_answers=}")
-        print(f"{e0_valid=}")
-        print(f"{e1_valid=}")
-        print(f"{both_valid=}")
-        same_answer = self.e0_answers[both_valid] == self.e1_answers[both_valid]
-        print(f"{np.sum(same_answer)=}, {len(same_answer)}")
-        """
-
         self.global_answers = np.zeros_like(self.vit4v_answers)
         self.global_answers[self.returned_by_e0] = self.e0_answers[self.returned_by_e0]
         self.global_answers[self.returned_by_e1] = self.e1_answers[self.returned_by_e1]
@@ -119,7 +106,6 @@ class SummaryPlot():
             "gpu_energy": 3,
             "ram_energy": 4
         }
-        # print(f'{phase=}, {p_metric=}, {np.mean(self.energy_performance["ee_cnn"]["exit_0"][phase][:,p_idx[p_metric]])=}')
         baseline_cost = np.copy(self.energy_performance["vit4v"][phase][:,p_idx[p_metric]])
         exit_0_cost = np.copy(self.energy_performance["ee_cnn"]["exit_0"][phase][:,p_idx[p_metric]])
         exit_1_cost = np.copy(self.energy_performance["ee_cnn"]["exit_1"][phase][:,p_idx[p_metric]])
@@ -131,12 +117,6 @@ class SummaryPlot():
 
         # saving_performance = baseline_cost - (exit_0_cost + exit_1_cost + vit4v_cost)
         complete_costs_vector = (exit_0_cost + exit_1_cost + vit4v_cost)
-
-        # print(f"{p_metric} {phase}:\n{np.mean(exit_0_cost[exit_0_cost!=0])=}\n{np.mean(exit_1_cost[exit_1_cost!=0])=}\n{np.mean(vit4v_cost[vit4v_cost!=0])=}")
-        """
-        if p_metric == "tot_energy" and phase == "inference":
-            print(f"[TEST AFTER] duration\nBASELINE: {baseline_cost}\nEXIT 0: {exit_0_cost}\nEXIT 1: {exit_1_cost}\nViT4V: {vit4v_cost}")
-        """
         
         return np.sum(complete_costs_vector), np.sum(baseline_cost)
 
@@ -264,58 +244,6 @@ class SummaryPlot():
         self.ax_total_metrics.set_title("Metrics", fontsize=11)
         self.ax_total_metrics.text(0.05, 0.95, metrics_text, va='top', fontsize=9, family="monospace")
 
-        """
-        self.ax_preprocessing_costs.clear()
-        self.ax_preprocessing_costs.axis('off')
-        self.ax_preprocessing_costs.set_title("Preprocessing Costs", fontsize=11)
-        # self.ax_preprocessing_costs.text(0.05, 0.95, costs_text, va='top', fontsize=9, family="monospace")
-        preprocessing_table = self.ax_preprocessing_costs.table(
-            cellText=[[f'{self.costs["duration"]["system"]["preprocessing"]:.4f} s',
-                       f'{self.costs["duration"]["baseline"]["preprocessing"]:.4f} s',
-                       f'{((self.costs["duration"]["baseline"]["preprocessing"] - self.costs["duration"]["system"]["preprocessing"])/self.costs["duration"]["baseline"]["preprocessing"])*100:.2f}%'],
-                      [f'{self.costs["tot_energy"]["system"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{((self.costs["tot_energy"]["baseline"]["preprocessing"] - self.costs["tot_energy"]["system"]["preprocessing"])/self.costs["tot_energy"]["baseline"]["preprocessing"])*100:.2f}%'],
-                      [f'{self.costs["cpu_energy"]["system"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{((self.costs["cpu_energy"]["baseline"]["preprocessing"] - self.costs["cpu_energy"]["system"]["preprocessing"])/self.costs["cpu_energy"]["baseline"]["preprocessing"])*100:.2f}%'],
-                      [f'{self.costs["gpu_energy"]["system"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["gpu_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{((self.costs["gpu_energy"]["baseline"]["preprocessing"] - self.costs["gpu_energy"]["system"]["preprocessing"])/self.costs["gpu_energy"]["baseline"]["preprocessing"])*100:.2f}%'],
-                      [f'{self.costs["ram_energy"]["system"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{((self.costs["ram_energy"]["baseline"]["preprocessing"] - self.costs["ram_energy"]["system"]["preprocessing"])/self.costs["ram_energy"]["baseline"]["preprocessing"])*100:.2f}%']],
-            colLabels=["System", "Baseline", "Savings"],
-            rowLabels=["Duration", "Tot Energy", "CPU Energy", "GPU Energy", "RAM Energy"],
-            bbox=[0, 0, 1, 1]
-        )
-        preprocessing_table.scale(1, 1.9)
-        
-        self.ax_inference_costs.clear()
-        self.ax_inference_costs.axis('off')
-        self.ax_inference_costs.set_title("Inference Costs", fontsize=11)
-        inference_table = self.ax_inference_costs.table(
-            cellText=[[f'{self.costs["duration"]["system"]["inference"]:.4f} s',
-                       f'{self.costs["duration"]["baseline"]["inference"]:.4f} s',
-                       f'{((self.costs["duration"]["baseline"]["inference"] - self.costs["duration"]["system"]["inference"])/self.costs["duration"]["baseline"]["inference"])*100:.2f}%'],
-                      [f'{self.costs["tot_energy"]["system"]["inference"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{((self.costs["tot_energy"]["baseline"]["inference"] - self.costs["tot_energy"]["system"]["inference"])/self.costs["tot_energy"]["baseline"]["inference"])*100:.2f}%'],
-                      [f'{self.costs["cpu_energy"]["system"]["inference"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{((self.costs["cpu_energy"]["baseline"]["inference"] - self.costs["cpu_energy"]["system"]["inference"])/self.costs["cpu_energy"]["baseline"]["inference"])*100:.2f}%'],
-                      [f'{self.costs["gpu_energy"]["system"]["inference"]:.4f}  kWh',
-                       f'{self.costs["gpu_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{((self.costs["gpu_energy"]["baseline"]["inference"] - self.costs["gpu_energy"]["system"]["inference"])/self.costs["gpu_energy"]["baseline"]["inference"])*100:.2f}%'],
-                      [f'{self.costs["ram_energy"]["system"]["inference"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{((self.costs["ram_energy"]["baseline"]["inference"] - self.costs["ram_energy"]["system"]["inference"])/self.costs["ram_energy"]["baseline"]["inference"])*100:.2f}%']],
-            colLabels=["System", "Baseline", "Savings"],
-            rowLabels=["Duration", "Tot Energy", "CPU Energy", "GPU Energy", "RAM Energy"],
-            bbox=[0, 0, 1, 1]
-        )
-        inference_table.scale(1, 1.9)
-        """
         self.ax_costs.clear()
         self.ax_costs.axis('off')
         self.ax_costs.set_title("Costs", fontsize=11)
