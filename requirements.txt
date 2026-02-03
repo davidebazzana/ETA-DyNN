@@ -1,0 +1,4 @@
+-r activity_emulator/requirements.txt
+-r ee_cnn/requirements.txt
+-r environment_aware_task_allocation/requirements.txt
+-r key_frame_extraction/requirements.txt

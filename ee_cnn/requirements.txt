@@ -1,0 +1,8 @@
+opencv-python
+tqdm
+numpy
+torch
+torchvision
+torchmetrics
+scikit-learn
+codecarbon
