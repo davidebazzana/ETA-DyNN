@@ -7,6 +7,7 @@ import pickle
 import csv
 import logging
 import sqlite3
+import random
 from pathlib import Path
 from datetime import datetime
 import cv2 as cv
@@ -18,14 +19,12 @@ import torchvision
 import torchvision.transforms.v2
 from torchvision import datasets, transforms
 from torchmetrics.classification import MulticlassAccuracy
-from stem.utils import train, test
 from ee_mobilenetv3.joint_ee_mobilenetv3 import Joint_EE_MobileNetV3
 from ee_mobilenetv3.utils import joint_train, joint_test
 from utils import analyse_reliability, fit_calibrator, save_calibrator, fit_thresholds, map_video_to_images_indexes, get_images
 from key_frame_extraction.key_frame_extraction.key_frame_extractor import KeyFrameExtractor
 from vit4v.util import process_video as vit4v_process_video
 from vit4v.lib.train.model_vivit import ModelVivit
-from vit4v.lib.dataset.VideoSegmenter import VideoSegmenter
 from codecarbon import EmissionsTracker
 import cProfile
 import pstats
@@ -49,8 +48,8 @@ transform_test = torchvision.transforms.v2.Compose(
 
 transform_train = torchvision.transforms.v2.Compose(
     [
-        v2.ToTensor(),
-        v2.Resize((256,256)),
+        torchvision.transforms.v2.ToTensor(),
+        torchvision.transforms.v2.Resize((256,256)),
         torchvision.transforms.Lambda(lambda img: F.rotate(img, float(random.randint(-180, 180)))),
         torchvision.transforms.Lambda(lambda img: img if random.random()>0.5 else F.hflip(img)),
         torchvision.transforms.Lambda(lambda img: img if random.random()>0.5 else F.vflip(img)),
@@ -82,8 +81,10 @@ if __name__ == "__main__":
     parser.add_argument('--video-file', type=str, help='Path to video to classify')
     parser.add_argument('--codename', type=str, help='Name to assign to the running task. All files/folders produced during the task, will be assigned a derivative name.')
     parser.add_argument('--dataset', type=str, help='Path to the dataset to be used.')
+    parser.add_argument('--dataset-year', type=str, help='2024 or 2025 dataset?')
     parser.add_argument('--model-hist', type=str, help='Path to the model histogram to be used by the key frame selection algorithm.')
     parser.add_argument('--vivit', type=str, help='Path to the vivit model .pth.')
+    parser.add_argument('--run-vit', action=argparse.BooleanOptionalAction, help='Run ViT4V during --experiment?')
     args = parser.parse_args()
 
     logging.getLogger("codecarbon").disabled = True
@@ -91,15 +92,15 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if args.dataset is None:
-        raise ValueError("Provide the path to the dataset with --dataset")
-
     if args.codename is not None:
         codename = args.codename
     else:
         raise RuntimeError("Provide --codename")
     
     if args.joint_cross_validation_auto:
+        if args.dataset is None:
+            raise ValueError("Provide the path to the dataset with --dataset")
+
         print('Launching cross-validation...')
 
         num_epochs = args.epochs if args.epochs is not None else 5
@@ -285,6 +286,9 @@ if __name__ == "__main__":
             json.dump(rpq_res, f)
 
     if args.extract_preds:
+        if args.dataset is None:
+            raise ValueError("Provide the path to the dataset with --dataset")
+
         # Extract scores
         models_files = [f for f in sorted(os.listdir(args.models_directory))
                         if (os.path.isfile(os.path.join(args.models_directory, f)) and
@@ -292,15 +296,16 @@ if __name__ == "__main__":
         fold_pattern = r'^fold_([0-9]+).pt$'
         final_pattern = r'^final.pt$'
         best_thresholds = []
-        with open("./dataset_metadata.json", 'r') as f:
+        with open("./mixed_dataset.json", 'r') as f:
             dataset_data = json.load(f)
 
-        dataset = [data for data in dataset_data["train"]["free"]] + [data for data in dataset_data["train"]["infested"]]
+        # dataset = [data for data in dataset_data["train"]["free"]] + [data for data in dataset_data["train"]["infested"]]
+        dataset = [data for data in dataset_data["train"]["free"] if data["year"] == 2024] + [data for data in dataset_data["train"]["infested"] if data["year"] == 2024]
 
         free_dir = Path(args.dataset)/"train"/"free"
-        free_images = get_images(free_dir)
+        free_images = get_images(free_dir, args.dataset_year)
         infested_dir = Path(args.dataset)/"train"/"infested"
-        infested_images = get_images(infested_dir)
+        infested_images = get_images(infested_dir, args.dataset_year)
         
         extracted_images_dataset = free_images + infested_images
         
@@ -310,7 +315,7 @@ if __name__ == "__main__":
             {"exit_idx": 0,
              "scores": None},
             {"exit_idx": 1,
-             "scores": None},                
+             "scores": None},
         ]
 
         train_labels = []
@@ -402,18 +407,23 @@ if __name__ == "__main__":
 
     if args.experiment:
         if args.model_hist is None:
-            raise ValueError("Provide the path to the model histogram to be used by the key frame selection algorithm with --model-hist")
+            model_hist = "../key_frame_extraction/assets/model_histograms/model_hist.npz"
+        else:
+            model_hist = args.model_hist
 
-        if args.vivit is None:
+        if args.run_vit and args.vivit is None:
             raise ValueError("Provide the path to the vivit model .pth with --vivit")
 
+        # Set up experiment database
         db = EXPERIMENTS_DB(path=f"{codename}.db")
         db.reset_database()
-        db.load_vit_validation("vit_validation")
+        db.load_vit_validation(dataset_codename="vit_validation",
+                               video_directory="/ssd/bazzana/ev2/videos_2024/ev2_varroa_dataset/")
 
         db.add_experiment(codename)
         db.add_dataset_to_experiment(codename, "vit_validation")
 
+        # Load the model parameters
         print(f"Experiment {codename}")
         print("[ee_cnn] Loading the model...")
         models_directory = f"./models/{codename}/"
@@ -432,11 +442,13 @@ if __name__ == "__main__":
                                                  map_location=torch.device('cpu'),
                                                  weights_only=True))
                 model.to(device)
+
+        # Iterate over the dataset of videos
         for label, video_file in tqdm(db.get_dataset_samples("vit_validation")):
             success = True
             
             with EmissionsTracker() as kfe_tracker:
-                kfe = KeyFrameExtractor(model_data=args.model_hist)
+                kfe = KeyFrameExtractor(model_data=model_hist)
                 file_name = os.path.basename(video_file)
                 pattern = r'^([0-9]*) [0-9- ]*.mkv$'
                 res = re.match(pattern, file_name)
@@ -561,91 +573,92 @@ if __name__ == "__main__":
                     )
                 )
 
-        print("[ViT4V] Loading the model...")
-        model_vivit:ModelVivit = ModelVivit(hidden_layers=12)
-        auto_processing = model_vivit.get_image_processor()
-        RESOLUTION = 224
-        model_vivit = torch.nn.DataParallel(model_vivit)
-        model_vivit.load_state_dict(torch.load(args.vivit, weights_only=True, map_location=device))
+        if args.run_vit:
+            print("[ViT4V] Loading the model...")
+            model_vivit:ModelVivit = ModelVivit(hidden_layers=12)
+            auto_processing = model_vivit.get_image_processor()
+            RESOLUTION = 224
+            model_vivit = torch.nn.DataParallel(model_vivit)
+            model_vivit.load_state_dict(torch.load(args.vivit, weights_only=True, map_location=device))
 
-        for label, video_file in tqdm(db.get_dataset_samples("vit_validation")):
-            success = True
-            
-            with EmissionsTracker() as kfe_tracker:
-                kfe = KeyFrameExtractor(model_data=args.model_hist)
-                try:
-                    frames = kfe.extract_frames(video_file,
-                                                squared=True,
-                                                return_all_frames=True)
-                except Exception as e:
-                    print("[ee_cnn] Key frame extraction failed", e)
-                    success = False
+            for label, video_file in tqdm(db.get_dataset_samples("vit_validation")):
+                success = True
 
-            if success and len(frames) > 0:
-                with EmissionsTracker() as vit_tracker:
+                with EmissionsTracker() as kfe_tracker:
+                    kfe = KeyFrameExtractor(model_data=model_hist)
                     try:
-                        vit4v_predictions = vit4v_process_video(model_vivit,
-                                                                video_file,
-                                                                window_size=32,
-                                                                device=device,
-                                                                model_resolution= RESOLUTION,
-                                                                image_processing=auto_processing,
-                                                                frames=frames)
-                    except:
-                        print("vit4v_process_video failed")
+                        frames = kfe.extract_frames(video_file,
+                                                    squared=True,
+                                                    return_all_frames=True)
+                    except Exception as e:
+                        print("[ee_cnn] Key frame extraction failed", e)
                         success = False
 
-            if success:
-                vit4v_predictions = list(vit4v_predictions)
-                if len(vit4v_predictions) == 0:
-                    vit4v_pred = -1
-                elif sum(vit4v_predictions)/len(vit4v_predictions) > 0.5:
-                    vit4v_pred = 1
-                else:
-                    vit4v_pred = 0
+                if success and len(frames) > 0:
+                    with EmissionsTracker() as vit_tracker:
+                        try:
+                            vit4v_predictions = vit4v_process_video(model_vivit,
+                                                                    video_file,
+                                                                    window_size=32,
+                                                                    device=device,
+                                                                    model_resolution= RESOLUTION,
+                                                                    image_processing=auto_processing,
+                                                                    frames=frames)
+                        except:
+                            print("vit4v_process_video failed")
+                            success = False
 
-                db.add_modelrun_with_performance(
-                    video_file,
-                    codename,
-                    "vit4v",
-                    None,
-                    scores=vit4v_pred,
-                    preprocessing_perf=(
-                        kfe_tracker.final_emissions_data.duration,
-                        kfe_tracker.final_emissions_data.energy_consumed,
-                        kfe_tracker.final_emissions_data.cpu_energy,
-                        kfe_tracker.final_emissions_data.gpu_energy,
-                        kfe_tracker.final_emissions_data.ram_energy,
-                    ),
-                    inference_perf=(
-                        vit_tracker.final_emissions_data.duration,
-                        vit_tracker.final_emissions_data.energy_consumed,
-                        vit_tracker.final_emissions_data.cpu_energy,
-                        vit_tracker.final_emissions_data.gpu_energy,
-                        vit_tracker.final_emissions_data.ram_energy,
+                if success:
+                    vit4v_predictions = list(vit4v_predictions)
+                    if len(vit4v_predictions) == 0:
+                        vit4v_pred = -1
+                    elif sum(vit4v_predictions)/len(vit4v_predictions) > 0.5:
+                        vit4v_pred = 1
+                    else:
+                        vit4v_pred = 0
+
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "vit4v",
+                        None,
+                        scores=vit4v_pred,
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(
+                            vit_tracker.final_emissions_data.duration,
+                            vit_tracker.final_emissions_data.energy_consumed,
+                            vit_tracker.final_emissions_data.cpu_energy,
+                            vit_tracker.final_emissions_data.gpu_energy,
+                            vit_tracker.final_emissions_data.ram_energy,
+                        )
                     )
-                )
-            else:
-                db.add_modelrun_with_performance(
-                    video_file,
-                    codename,
-                    "vit4v",
-                    None,
-                    scores=-1,
-                    preprocessing_perf=(
-                        kfe_tracker.final_emissions_data.duration,
-                        kfe_tracker.final_emissions_data.energy_consumed,
-                        kfe_tracker.final_emissions_data.cpu_energy,
-                        kfe_tracker.final_emissions_data.gpu_energy,
-                        kfe_tracker.final_emissions_data.ram_energy,
-                    ),
-                    inference_perf=(
-                        vit_tracker.final_emissions_data.duration,
-                        vit_tracker.final_emissions_data.energy_consumed,
-                        vit_tracker.final_emissions_data.cpu_energy,
-                        vit_tracker.final_emissions_data.gpu_energy,
-                        vit_tracker.final_emissions_data.ram_energy,
+                else:
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "vit4v",
+                        None,
+                        scores=-1,
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(
+                            vit_tracker.final_emissions_data.duration,
+                            vit_tracker.final_emissions_data.energy_consumed,
+                            vit_tracker.final_emissions_data.cpu_energy,
+                            vit_tracker.final_emissions_data.gpu_energy,
+                            vit_tracker.final_emissions_data.ram_energy,
+                        )
                     )
-                )
             
         db.close()

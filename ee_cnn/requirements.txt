@@ -6,3 +6,8 @@ torchvision
 torchmetrics
 scikit-learn
 codecarbon
+matplotlib
+pycalib
+tensorboard
+betacal
+transformers

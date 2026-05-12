@@ -390,7 +390,9 @@ def map_video_to_images_indexes(videos_dataset, images_dataset, video_indexes, d
     for index in video_indexes:
         label = videos_dataset[index]["label"]
         bee_id = videos_dataset[index]["id"]
-        pattern = f'^{label}_{bee_id}_[0-9]*.png$'
+        year = videos_dataset[index]["year"]
+        # pattern = f'^{label}_{bee_id}_[0-9]*.png$'
+        pattern = f'^{label}_{bee_id}_[0-9]*_{year}.png$'
         for image in images_dataset:
             res = re.match(pattern, image)
             if res:
@@ -398,8 +400,17 @@ def map_video_to_images_indexes(videos_dataset, images_dataset, video_indexes, d
 
     return images
 
-def get_images(folder:Path):
+def get_images(folder:Path, year:str|None = None):
     images = [f for f in sorted(os.listdir(folder))
               if (os.path.isfile(os.path.join(folder, f)) and
                   f.endswith('.png'))]
-    return images
+    if year is not None:
+        filtered_images = []
+        year_pattern = r'^[01]_[0-9]*_[0-9]*_(2024|2025).png$'
+        for image in images:
+            res = re.match(year_pattern, image)
+            if res and res.group(1) == year:
+                filtered_images.append(image)
+        return filtered_images
+    else:
+        return images

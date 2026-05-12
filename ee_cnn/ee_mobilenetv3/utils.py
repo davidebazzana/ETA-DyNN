@@ -112,7 +112,7 @@ def joint_test(model, data_loader, device:str, epoch:int=None, writer:SummaryWri
             loss = multi_exit_loss(out, labels.float())
             
             props = [nn.functional.sigmoid(exit_predictions) for exit_predictions in out]
-            
+
             rpq.update(labels, props)
             
             if n == 0:

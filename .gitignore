@@ -1,8 +1,13 @@
+models/
+scores/
+
 *.pdf
 
 *.json
 
 *.org
+
+vit_validation_partition.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -329,7 +329,9 @@ class EXPERIMENTS_DB:
         return labels
         
     
-    def load_vit_validation(self, dataset_codename:str="vit_validation"):
+    def load_vit_validation(self,
+                            dataset_codename:str="vit_validation",
+                            video_directory:str="/mnt/datasets/prin/video_raw/v2/"):
         res = self.add_dataset(dataset_codename)
 
         if not res:
@@ -337,7 +339,7 @@ class EXPERIMENTS_DB:
 
         pattern = r"video([0-9]+)_varroa_(free|infested)_[0-9]+-[0-9]+"
     
-        file_path = "/home/davide/Research/EnsembleSelection/Proposal/dataset_partitioning/vit_validation_partition.txt"
+        file_path = "./vit_validation_partition.txt"
         
         with open(file_path, 'r') as f:
             content = f.read()
@@ -349,7 +351,7 @@ class EXPERIMENTS_DB:
         
         id_pattern = r"^([0-9]+) [\w\- .]*\.mkv$"
         
-        free_video_directory = "/mnt/datasets/prin/video_raw/v2/varroa_free/"
+        free_video_directory = video_directory + "varroa_free/"
         free_video_files = [f for f in sorted(os.listdir(free_video_directory))
                             if (os.path.isfile(os.path.join(free_video_directory, f)) and
                                 f.endswith('.mkv'))]
@@ -359,7 +361,7 @@ class EXPERIMENTS_DB:
             if match and video_id in testing_free_ids:
                 self.add_sample(dataset_codename, os.path.join(free_video_directory, free_video), 0)
 
-        infested_video_directory = "/mnt/datasets/prin/video_raw/v2/varroa_infested/"
+        infested_video_directory = video_directory + "varroa_infested/"
         infested_video_files = [f for f in sorted(os.listdir(infested_video_directory))
                                 if (os.path.isfile(os.path.join(infested_video_directory, f)) and
                                     f.endswith('.mkv'))]
