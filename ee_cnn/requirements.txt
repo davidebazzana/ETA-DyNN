@@ -11,3 +11,4 @@ pycalib
 tensorboard
 betacal
 transformers
+requests

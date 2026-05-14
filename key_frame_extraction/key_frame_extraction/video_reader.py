@@ -1,3 +1,4 @@
+import sys
 import cv2 as cv
 from .utils import scale_image
 

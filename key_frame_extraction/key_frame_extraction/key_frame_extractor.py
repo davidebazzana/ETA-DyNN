@@ -9,6 +9,7 @@ from .video_reader import VideoReader
 import time
 from codecarbon import track_emissions
 from tqdm import tqdm
+import tracemalloc
 
 class KeyFrameExtractor():
     """Extract key frames from a video.
@@ -293,6 +294,7 @@ class KeyFrameExtractor():
         return_iou -- return the iou values for each frame
         bb_gt -- the ground truth of the bounding box
         """
+
         if verbose:
             print(f"Computing optical flow on video {video}")
         
@@ -305,7 +307,7 @@ class KeyFrameExtractor():
 
         # motion metric
         motion_features = np.array([])
-        
+
         # Read the entire video into memory
         video_reader = VideoReader(cap, scale=self.scale, return_original=True)
         frames_iter = iter(video_reader)
@@ -530,15 +532,17 @@ class KeyFrameExtractor():
 
                 cv.imshow('Input Video', frame)
                 cv.imshow('Optical Flow', bp_frame)
+            """
             k = cv.waitKey(30) & 0xff
             if k == 27:
                 break
+            """
 
             old_back_proj = back_proj.copy()
             frame_num += 1
 
-        cv.destroyAllWindows()
-        
+        # cv.destroyAllWindows()
+
         if return_all_frames:
             return cropped_frames
 

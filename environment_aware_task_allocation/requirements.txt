@@ -3,5 +3,4 @@ scipy
 matplotlib
 tqdm
 scikit-learn
-PyQt5
 termcolor
