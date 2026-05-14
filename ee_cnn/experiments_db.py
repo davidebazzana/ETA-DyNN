@@ -63,7 +63,7 @@ class EXPERIMENTS_DB:
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sample_id INTEGER NOT NULL,
         experiment_id INTEGER NOT NULL,
-        model_codename TEXT NOT NULL CHECK (model_codename IN ('ee_cnn', 'vit4v')),
+        model_codename TEXT NOT NULL CHECK (model_codename IN ('ee_cnn', 'vit4v', 'wifi')),
         exit_idx INTEGER,
         scores BLOB,
         FOREIGN KEY (sample_id) REFERENCES Sample(id) ON DELETE CASCADE,
@@ -75,7 +75,7 @@ class EXPERIMENTS_DB:
         CREATE TABLE IF NOT EXISTS Performance (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         modelrun_id INTEGER NOT NULL,
-        phase TEXT NOT NULL CHECK (phase IN ('preprocessing','inference')),
+        phase TEXT NOT NULL CHECK (phase IN ('preprocessing','inference', 'transferring')),
         duration REAL NOT NULL,
         tot_energy REAL NOT NULL,
         cpu_energy REAL NOT NULL,

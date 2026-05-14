@@ -439,7 +439,6 @@ if __name__ == "__main__":
 
         # Iterate over the dataset of videos
         for label, video_file in tqdm(db.get_dataset_samples("vit_validation")):
-            print(f"{video_file=}")
             success = True
 
             with EmissionsTracker() as kfe_tracker:
@@ -481,6 +480,9 @@ if __name__ == "__main__":
             else:
                 success = False
 
+            with EmissionsTracker() as transferring_tracker:
+                upload(video_file)
+                
             if success:
                 db.add_modelrun_with_performance(
                     video_file,
@@ -567,5 +569,20 @@ if __name__ == "__main__":
                         ee_cnn_exit_1_tracker.final_emissions_data.ram_energy,
                     )
                 )
-            
+            transferring_id = db.add_modelrun(
+                video_file,
+                codename,
+                "wifi",
+                0,
+                scores=None
+            )
+            db.add_performance(
+                transferring_id,
+                "transferring",
+                transferring_tracker.final_emissions_data.duration,
+                transferring_tracker.final_emissions_data.energy_consumed,
+                transferring_tracker.final_emissions_data.cpu_energy,
+                transferring_tracker.final_emissions_data.gpu_energy,
+                transferring_tracker.final_emissions_data.ram_energy
+            )
         db.close()
