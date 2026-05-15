@@ -73,3 +73,21 @@ def compute_iou(boxA, boxB, bb_format:str="x_y_max"):
     # Compute IoU
     iou = inter_area / float(boxA_area + boxB_area - inter_area) if (boxA_area + boxB_area - inter_area) != 0 else 0
     return iou
+
+def retrieve_frames(cap:cv.VideoCapture, frames_to_retrieve:list, cropping_data:list):
+    frame_num = 1
+    frames = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        if frame_num in frames_to_retrieve and cropping_data[frame_num] is not None:
+            frame = frame[cropping_data[frame_num][0]:cropping_data[frame_num][1],
+                          cropping_data[frame_num][2]:cropping_data[frame_num][3]]
+            if 0 not in frame.shape: frames.append(frame)
+
+        frame_num += 1
+
+    return frames

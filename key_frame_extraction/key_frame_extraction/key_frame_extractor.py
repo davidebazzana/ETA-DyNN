@@ -4,7 +4,7 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import os.path
 from scipy.signal import find_peaks, savgol_filter
-from .utils import resize_to_fit, map_bboxes_to_original, compute_iou, is_inside
+from .utils import resize_to_fit, map_bboxes_to_original, compute_iou, is_inside, retrieve_frames
 from .video_reader import VideoReader
 import time
 from codecarbon import track_emissions
@@ -309,19 +309,20 @@ class KeyFrameExtractor():
         motion_features = np.array([])
 
         # Read the entire video into memory
-        video_reader = VideoReader(cap, scale=self.scale, return_original=True)
+        video_reader = VideoReader(cap, scale=self.scale, return_original=False)
+        cap.release()
         frames_iter = iter(video_reader)
 
         # Read first frame
         color = np.random.randint(0, 255, (100, 3))
-        old_frame, _ = next(frames_iter)
+        old_frame = next(frames_iter)
         old_back_proj = self.back_project(old_frame)
         p0 = cv.goodFeaturesToTrack(old_back_proj, mask = None, **self.feature_params)
         
         # Create a mask image for drawing purposes
         mask = np.zeros_like(old_frame)
         bounding_boxes = []
-        cropped_frames = []
+        cropping_data = []
 
         if return_iou and bb_gt is not None:
             iou_data = {
@@ -335,7 +336,7 @@ class KeyFrameExtractor():
         trajectory = []
         while(1):
             try:
-                frame, original_frame = next(frames_iter)
+                frame = next(frames_iter)
             except StopIteration:
                 if verbose:
                     print('No more frames: reached end of video.')
@@ -406,23 +407,24 @@ class KeyFrameExtractor():
                 if not extract_orientation:
                     motion_features = np.append(motion_features, -1)
                 if not return_all_frames:
-                    """
-                    If not return_all_frames, then it only returns the key frames.
-                    This None append will serve as a placeholder for the indexing of the
-                    key frames.
-                    """
-                    cropped_frames.append(None)
+                    # If not return_all_frames, then it only returns the key frames.
+                    # This None append will serve as a placeholder for the indexing of the
+                    # key frames.
+                    cropping_data.append(None)
             else:
                 bounding_boxes.append(winning_bounding_box)
                 if squared:
                     start_h, start_w, dim = self.get_squared_bb(winning_bounding_box)
-                    original_frame = original_frame[start_h:start_h + dim,
-                                                    start_w:start_w + dim]
-                    if 0 not in original_frame.shape: cropped_frames.append(original_frame)
+                    # original_frame = original_frame[start_h:start_h + dim, start_w:start_w + dim]
+                    cropping = [start_h, start_h + dim, start_w, start_w + dim]
+                    # if 0 not in original_frame.shape: cropped_frames.append(original_frame)
+                    cropping_data.append(cropping)
                 else:
                     x1, y1, x2, y2 = map_bboxes_to_original(winning_bounding_box, self.scale)
-                    original_frame = original_frame[y1:y2,x1:x2]
-                    if 0 not in original_frame.shape: cropped_frames.append(original_frame)
+                    # original_frame = original_frame[y1:y2,x1:x2]
+                    cropping = [y1, y2, x1, x2]
+                    # if 0 not in original_frame.shape: cropped_frames.append(original_frame)
+                    cropping_data.append(cropping)
                     
                 p1, st, err = cv.calcOpticalFlowPyrLK(old_back_proj, back_proj, p0, None, **self.lk_params)
                 
@@ -543,8 +545,10 @@ class KeyFrameExtractor():
 
         # cv.destroyAllWindows()
 
+        """
         if return_all_frames:
             return cropped_frames
+        """
 
         if return_motion_metric:
             trajectory = np.array(trajectory)
@@ -592,8 +596,10 @@ class KeyFrameExtractor():
         if return_bounding_boxes:
             return key_frames, bounding_boxes_original_coords, motion_features
 
-        cropped_frames = [cropped_frames[key_frame] for key_frame in key_frames
-                          if cropped_frames[key_frame] is not None]
+        cap = cv.VideoCapture(video)
+        cropped_frames = retrieve_frames(cap, key_frames, cropping_data)
+        cap.release()
+        # cropped_frames = [cropped_frames[key_frame] for key_frame in key_frames if cropped_frames[key_frame] is not None]
         return cropped_frames
 
     def get_squared_bb(self, bounding_box):

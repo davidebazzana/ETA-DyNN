@@ -458,7 +458,10 @@ if __name__ == "__main__":
                     print("[ee_cnn] Key frame extraction failed", e)
                     success = False
 
-            if success and len(cropped) > 0:
+            if len(cropped) == 0:
+                success = False
+                    
+            if success:
                 frames = []
                 for frame_idx, img in enumerate(cropped):
                     frame = transform_test(img)
@@ -477,8 +480,6 @@ if __name__ == "__main__":
                         frames = frames.to(device)
                         out = model(frames)
                         exit_1_props = np.array([nn.functional.sigmoid(exit_predictions).cpu().detach().numpy() for exit_predictions in out]).squeeze()
-            else:
-                success = False
 
             with EmissionsTracker() as transferring_tracker:
                 upload(video_file)
@@ -540,13 +541,7 @@ if __name__ == "__main__":
                         kfe_tracker.final_emissions_data.gpu_energy,
                         kfe_tracker.final_emissions_data.ram_energy,
                     ),
-                    inference_perf=(
-                        ee_cnn_exit_0_tracker.final_emissions_data.duration,
-                        ee_cnn_exit_0_tracker.final_emissions_data.energy_consumed,
-                        ee_cnn_exit_0_tracker.final_emissions_data.cpu_energy,
-                        ee_cnn_exit_0_tracker.final_emissions_data.gpu_energy,
-                        ee_cnn_exit_0_tracker.final_emissions_data.ram_energy,
-                    )
+                    inference_perf=(0, 0, 0, 0, 0)
                 )
                 db.add_modelrun_with_performance(
                     video_file,
@@ -561,13 +556,7 @@ if __name__ == "__main__":
                         kfe_tracker.final_emissions_data.gpu_energy,
                         kfe_tracker.final_emissions_data.ram_energy,
                     ),
-                    inference_perf=(
-                        ee_cnn_exit_1_tracker.final_emissions_data.duration,
-                        ee_cnn_exit_1_tracker.final_emissions_data.energy_consumed,
-                        ee_cnn_exit_1_tracker.final_emissions_data.cpu_energy,
-                        ee_cnn_exit_1_tracker.final_emissions_data.gpu_energy,
-                        ee_cnn_exit_1_tracker.final_emissions_data.ram_energy,
-                    )
+                    inference_perf=(0, 0, 0, 0, 0)
                 )
             transferring_id = db.add_modelrun(
                 video_file,
