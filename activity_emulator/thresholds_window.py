@@ -7,6 +7,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 from confidence_plot import ConfidencePlot
 from summary_plot import SummaryPlot
+from tqdm import tqdm
 
 
 class SummaryPlotWidget(QWidget):

@@ -23,6 +23,10 @@ class SummaryPlot():
                                                      dataset_codename,
                                                      "ee_cnn",
                                                      1)
+        performance_transferring = self.db.get_transferring_performance(experiment_codename,
+                                                                        dataset_codename,
+                                                                        "wifi",
+                                                                        0)
         performance_vit4v = self.db.get_performance(experiment_codename,
                                                     dataset_codename,
                                                     "vit4v")
@@ -39,8 +43,9 @@ class SummaryPlot():
             },
             "vit4v": {
                 "preprocessing": np.array(performance_vit4v["preprocessing"]),
-                "inference": np.array(performance_vit4v["inference"])                
-            }
+                "inference": np.array(performance_vit4v["inference"])  
+            },
+            "wifi": np.array(performance_transferring)
         }
         self.labels = np.array(self.db.get_labels(dataset_codename))
         self.vit4v_answers = np.array(self.db.get_scores(experiment_codename,
@@ -120,6 +125,21 @@ class SummaryPlot():
         
         return np.sum(complete_costs_vector), np.sum(baseline_cost)
 
+    def compute_transferring_costs(self, p_metric):
+        p_idx = {
+            "duration": 0,
+            "tot_energy": 1,
+            "cpu_energy": 2,
+            "gpu_energy": 3,
+            "ram_energy": 4
+        }
+        transferring_cost = np.copy(self.energy_performance["wifi"][:,p_idx[p_metric]])
+
+        transferring_cost[~self.returned_by_vit4v] = 0
+
+        baseline_cost = 0
+        return np.sum(transferring_cost), baseline_cost
+
     def retrieve_costs(self):
         duration_pre, duration_pre_baseline = self.compute_costs("duration", "preprocessing")
         duration_inf, duration_inf_baseline = self.compute_costs("duration", "inference")
@@ -131,7 +151,12 @@ class SummaryPlot():
         gpu_energy_inf, gpu_energy_inf_baseline = self.compute_costs("gpu_energy", "inference")
         ram_energy_pre, ram_energy_pre_baseline = self.compute_costs("ram_energy", "preprocessing")
         ram_energy_inf, ram_energy_inf_baseline = self.compute_costs("ram_energy", "inference")
-        
+        duration_trans, _ = self.compute_transferring_costs("duration")
+        tot_energy_trans, _ = self.compute_transferring_costs("tot_energy")
+        cpu_energy_trans, _ = self.compute_transferring_costs("cpu_energy")
+        gpu_energy_trans, _ = self.compute_transferring_costs("gpu_energy")
+        ram_energy_trans, _ = self.compute_transferring_costs("ram_energy")
+
         self.costs = {
             "duration": {
                 "baseline": {
@@ -142,7 +167,8 @@ class SummaryPlot():
                 "system": {
                     "preprocessing": duration_pre,
                     "inference": duration_inf,
-                    "total": duration_pre + duration_inf
+                    "transferring": duration_trans,
+                    "total": duration_pre + duration_inf + duration_trans
                 }
             },
             "tot_energy": {
@@ -154,7 +180,8 @@ class SummaryPlot():
                 "system": {
                     "preprocessing": tot_energy_pre,
                     "inference": tot_energy_inf,
-                    "total": tot_energy_pre + tot_energy_inf
+                    "transferring": tot_energy_trans,
+                    "total": tot_energy_pre + tot_energy_inf + tot_energy_trans
                 }
             },
             "cpu_energy": {
@@ -166,7 +193,8 @@ class SummaryPlot():
                 "system": {
                     "preprocessing": cpu_energy_pre,
                     "inference": cpu_energy_inf,
-                    "total": cpu_energy_pre + cpu_energy_inf
+                    "transferring": cpu_energy_trans,
+                    "total": cpu_energy_pre + cpu_energy_inf + cpu_energy_trans
                 }
             },
             "gpu_energy": {
@@ -178,7 +206,8 @@ class SummaryPlot():
                 "system": {
                     "preprocessing": gpu_energy_pre,
                     "inference": gpu_energy_inf,
-                    "total": gpu_energy_pre + gpu_energy_inf
+                    "transferring": gpu_energy_trans,
+                    "total": gpu_energy_pre + gpu_energy_inf + gpu_energy_trans
                 }
             },
             "ram_energy": {
@@ -190,7 +219,8 @@ class SummaryPlot():
                 "system": {
                     "preprocessing": ram_energy_pre,
                     "inference": ram_energy_inf,
-                    "total": ram_energy_pre + ram_energy_inf
+                    "transferring": ram_energy_trans,
+                    "total": ram_energy_pre + ram_energy_inf + ram_energy_trans
                 }
             }
         }
@@ -247,11 +277,13 @@ class SummaryPlot():
         self.ax_costs.clear()
         self.ax_costs.axis('off')
         self.ax_costs.set_title("Costs", fontsize=11)
+        print(f'{self.costs["tot_energy"]["system"]["transferring"]=}')
         total_table = self.ax_costs.table(
             cellText=[[f'{self.costs["duration"]["system"]["preprocessing"]:.4f} s',
                        f'{self.costs["duration"]["baseline"]["preprocessing"]:.4f} s',
                        f'{self.costs["duration"]["system"]["inference"]:.4f} s',
                        f'{self.costs["duration"]["baseline"]["inference"]:.4f} s',
+                       f'{self.costs["duration"]["system"]["transferring"]:.4f} s',
                        f'{self.costs["duration"]["system"]["total"]:.4f} s',
                        f'{self.costs["duration"]["baseline"]["total"]:.4f} s',
                        f'{((self.costs["duration"]["baseline"]["total"] - self.costs["duration"]["system"]["total"])/self.costs["duration"]["baseline"]["total"])*100:.2f}%'],
@@ -259,6 +291,7 @@ class SummaryPlot():
                        f'{self.costs["tot_energy"]["baseline"]["preprocessing"]:.4f} kWh',
                        f'{self.costs["tot_energy"]["system"]["inference"]:.4f} kWh',
                        f'{self.costs["tot_energy"]["baseline"]["inference"]:.4f} kWh',
+                       f'{self.costs["tot_energy"]["system"]["transferring"]:.4f} kWh',
                        f'{self.costs["tot_energy"]["system"]["total"]:.4f} kWh',
                        f'{self.costs["tot_energy"]["baseline"]["total"]:.4f} kWh',
                        f'{((self.costs["tot_energy"]["baseline"]["total"] - self.costs["tot_energy"]["system"]["total"])/self.costs["tot_energy"]["baseline"]["total"])*100:.2f}%'],
@@ -266,6 +299,7 @@ class SummaryPlot():
                        f'{self.costs["cpu_energy"]["baseline"]["preprocessing"]:.4f} kWh',
                        f'{self.costs["cpu_energy"]["system"]["inference"]:.4f} kWh',
                        f'{self.costs["cpu_energy"]["baseline"]["inference"]:.4f} kWh',
+                       f'{self.costs["cpu_energy"]["system"]["transferring"]:.4f} kWh',
                        f'{self.costs["cpu_energy"]["system"]["total"]:.4f} kWh',
                        f'{self.costs["cpu_energy"]["baseline"]["total"]:.4f} kWh',
                        f'{((self.costs["cpu_energy"]["baseline"]["total"] - self.costs["cpu_energy"]["system"]["total"])/self.costs["cpu_energy"]["baseline"]["total"])*100:.2f}%'],
@@ -273,6 +307,7 @@ class SummaryPlot():
                        f'{self.costs["gpu_energy"]["baseline"]["preprocessing"]:.4f} kWh',
                        f'{self.costs["gpu_energy"]["system"]["inference"]:.4f} kWh',
                        f'{self.costs["gpu_energy"]["baseline"]["inference"]:.4f} kWh',
+                       f'{self.costs["gpu_energy"]["system"]["transferring"]:.4f} kWh',
                        f'{self.costs["gpu_energy"]["system"]["total"]:.4f} kWh',
                        f'{self.costs["gpu_energy"]["baseline"]["total"]:.4f} kWh',
                        f'{((self.costs["gpu_energy"]["baseline"]["total"] - self.costs["gpu_energy"]["system"]["total"])/self.costs["gpu_energy"]["baseline"]["total"])*100:.2f}%'],
@@ -280,10 +315,11 @@ class SummaryPlot():
                        f'{self.costs["ram_energy"]["baseline"]["preprocessing"]:.4f} kWh',
                        f'{self.costs["ram_energy"]["system"]["inference"]:.4f} kWh',
                        f'{self.costs["ram_energy"]["baseline"]["inference"]:.4f} kWh',
+                       f'{self.costs["ram_energy"]["system"]["transferring"]:.4f} kWh',
                        f'{self.costs["ram_energy"]["system"]["total"]:.4f} kWh',
                        f'{self.costs["ram_energy"]["baseline"]["total"]:.4f} kWh',
                        f'{((self.costs["ram_energy"]["baseline"]["total"] - self.costs["ram_energy"]["system"]["total"])/self.costs["ram_energy"]["baseline"]["total"])*100:.2f}%']],
-            colLabels=["System (Pre)", "Baseline (Pre)", "System (Inf)", "Baseline (Inf)", "System (Tot)", "Baseline (Tot)", "Savings"],
+            colLabels=["System (Pre)", "Baseline (Pre)", "System (Inf)", "Baseline (Inf)", "System (Trans)", "System (Tot)", "Baseline (Tot)", "Savings"],
             rowLabels=["Duration", "Tot Energy", "CPU Energy", "GPU Energy", "RAM Energy"],
             bbox=[0, 0, 1, 1]
         )

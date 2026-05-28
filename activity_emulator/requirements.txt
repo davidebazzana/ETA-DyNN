@@ -5,3 +5,4 @@ tqdm
 scikit-learn
 PyQt5
 termcolor
+tqdm

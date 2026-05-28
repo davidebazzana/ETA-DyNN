@@ -63,7 +63,7 @@ class EXPERIMENTS_DB:
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sample_id INTEGER NOT NULL,
         experiment_id INTEGER NOT NULL,
-        model_codename TEXT NOT NULL CHECK (model_codename IN ('ee_cnn', 'vit4v')),
+        model_codename TEXT NOT NULL CHECK (model_codename IN ('ee_cnn', 'vit4v', 'wifi')),
         exit_idx INTEGER,
         scores BLOB,
         FOREIGN KEY (sample_id) REFERENCES Sample(id) ON DELETE CASCADE,
@@ -75,7 +75,7 @@ class EXPERIMENTS_DB:
         CREATE TABLE IF NOT EXISTS Performance (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         modelrun_id INTEGER NOT NULL,
-        phase TEXT NOT NULL CHECK (phase IN ('preprocessing','inference')),
+        phase TEXT NOT NULL CHECK (phase IN ('preprocessing','inference', 'transferring')),
         duration REAL NOT NULL,
         tot_energy REAL NOT NULL,
         cpu_energy REAL NOT NULL,
@@ -198,6 +198,26 @@ class EXPERIMENTS_DB:
 
         return modelrun_id
 
+    def add_transferring_modelrun_with_performance(
+        self,
+        sample_file_path,
+        experiment_codename,
+        model_codename,
+        exit_idx,
+        scores,
+        transferring_perf
+    ):
+        modelrun_id = self.add_modelrun(sample_file_path, experiment_codename,
+                                        model_codename, exit_idx, scores)
+
+        self.add_performance(
+            modelrun_id,
+            "transferring",
+            *transferring_perf
+        )
+
+        return modelrun_id
+
     def get_dataset_id(self, codename):
         self.cur.execute("SELECT id FROM Dataset WHERE codename=?", (codename,))
         dataset = self.cur.fetchone()
@@ -243,6 +263,19 @@ class EXPERIMENTS_DB:
         WHERE e.codename = (?)
         """, (codename,))
         return self.cur.fetchall()
+
+    def get_experiment_runs_w_modelrun(self, codename):
+        self.cur.execute("""
+        SELECT s.file_path, m.id, m.model_codename, m.scores, m.exit_idx, p.phase, p.duration, p.tot_energy, p.cpu_energy, p.gpu_energy, p.ram_energy
+        FROM Experiment e
+        JOIN ExperimentDataset ed ON e.id = ed.experiment_id
+        JOIN Dataset d ON d.id = ed.dataset_id
+        JOIN Sample s ON s.dataset_id = d.id
+        JOIN ModelRun m ON m.sample_id = s.id
+        JOIN Performance p ON p.modelrun_id = m.id
+        WHERE e.codename = (?)
+        """, (codename,))
+        return self.cur.fetchall()    
 
     def get_dataset_samples(self, dataset_codename):
         self.cur.execute("""
@@ -316,6 +349,27 @@ class EXPERIMENTS_DB:
         
         return performance
 
+    def get_transferring_performance(self, experiment_codename:str, dataset_codename:str, model_codename:str, exit_idx:int|None=None):
+        self.cur.execute("""
+        SELECT p.duration, p.tot_energy, p.cpu_energy, p.gpu_energy, p.ram_energy
+        FROM ExperimentDataset ed
+        JOIN Experiment e ON e.id = ed.experiment_id
+        JOIN Dataset d ON d.id = ed.dataset_id
+        JOIN Sample s ON s.dataset_id = d.id
+        JOIN ModelRun m ON m.sample_id = s.id
+        JOIN Performance p ON p.modelrun_id = m.id
+        WHERE e.codename = ?
+        AND d.codename = ?
+        AND m.model_codename = ?
+        AND (m.exit_idx = ? OR m.exit_idx IS NULL)
+        AND p.phase = 'transferring'
+        GROUP BY m.id
+        ORDER BY s.id
+        """, (experiment_codename, dataset_codename, model_codename, exit_idx))
+        rows = self.cur.fetchall()
+        
+        return rows
+    
     def get_labels(self, dataset_codename):
         self.cur.execute("""
         SELECT s.label
@@ -329,7 +383,9 @@ class EXPERIMENTS_DB:
         return labels
         
     
-    def load_vit_validation(self, dataset_codename:str="vit_validation"):
+    def load_vit_validation(self,
+                            dataset_codename:str="vit_validation",
+                            video_directory:str="/mnt/datasets/prin/video_raw/v2/"):
         res = self.add_dataset(dataset_codename)
 
         if not res:
@@ -337,7 +393,7 @@ class EXPERIMENTS_DB:
 
         pattern = r"video([0-9]+)_varroa_(free|infested)_[0-9]+-[0-9]+"
     
-        file_path = "/home/davide/Research/EnsembleSelection/Proposal/dataset_partitioning/vit_validation_partition.txt"
+        file_path = "./vit_validation_partition.txt"
         
         with open(file_path, 'r') as f:
             content = f.read()
@@ -349,7 +405,7 @@ class EXPERIMENTS_DB:
         
         id_pattern = r"^([0-9]+) [\w\- .]*\.mkv$"
         
-        free_video_directory = "/mnt/datasets/prin/video_raw/v2/varroa_free/"
+        free_video_directory = video_directory + "varroa_free/"
         free_video_files = [f for f in sorted(os.listdir(free_video_directory))
                             if (os.path.isfile(os.path.join(free_video_directory, f)) and
                                 f.endswith('.mkv'))]
@@ -359,7 +415,7 @@ class EXPERIMENTS_DB:
             if match and video_id in testing_free_ids:
                 self.add_sample(dataset_codename, os.path.join(free_video_directory, free_video), 0)
 
-        infested_video_directory = "/mnt/datasets/prin/video_raw/v2/varroa_infested/"
+        infested_video_directory = video_directory + "varroa_infested/"
         infested_video_files = [f for f in sorted(os.listdir(infested_video_directory))
                                 if (os.path.isfile(os.path.join(infested_video_directory, f)) and
                                     f.endswith('.mkv'))]

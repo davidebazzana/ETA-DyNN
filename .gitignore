@@ -1,3 +1,7 @@
+experiment_samples_dataset.pkl
+thresholds_search_data.pkl
+activity_emulator/*.db
+
 *.pdf
 
 *.json
