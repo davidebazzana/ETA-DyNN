@@ -381,7 +381,19 @@ class EXPERIMENTS_DB:
         rows = self.cur.fetchall()
         labels = [row[0] for row in rows]
         return labels
-        
+
+    def rename_experiment(self, old_codename, new_codename):
+        try:
+            self.cur.execute("""
+                UPDATE Experiment
+                SET codename = ?
+                WHERE codename = ?
+            """, (new_codename, old_codename))
+
+            self.conn.commit()
+
+        except sqlite3.IntegrityError:
+            print(f"Codename '{new_codename}' already exists.")
     
     def load_vit_validation(self,
                             dataset_codename:str="vit_validation",
