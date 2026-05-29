@@ -323,6 +323,7 @@ class KeyFrameExtractor():
         mask = np.zeros_like(old_frame)
         bounding_boxes = []
         cropping_data = []
+        detected_frames = []
 
         if return_iou and bb_gt is not None:
             iou_data = {
@@ -406,12 +407,13 @@ class KeyFrameExtractor():
                 bounding_boxes.append(None)
                 if not extract_orientation:
                     motion_features = np.append(motion_features, -1)
-                if not return_all_frames:
-                    # If not return_all_frames, then it only returns the key frames.
-                    # This None append will serve as a placeholder for the indexing of the
-                    # key frames.
-                    cropping_data.append(None)
+                # if not return_all_frames:
+                # If not return_all_frames, then it only returns the key frames.
+                # This None append will serve as a placeholder for the indexing of the
+                # key frames.
+                cropping_data.append(None)
             else:
+                detected_frames.append(frame_num)
                 bounding_boxes.append(winning_bounding_box)
                 if squared:
                     start_h, start_w, dim = self.get_squared_bb(winning_bounding_box)
@@ -545,10 +547,11 @@ class KeyFrameExtractor():
 
         # cv.destroyAllWindows()
 
-        """
         if return_all_frames:
+            cap = cv.VideoCapture(video)
+            cropped_frames = retrieve_frames(cap, detected_frames, cropping_data)
+            cap.release()
             return cropped_frames
-        """
 
         if return_motion_metric:
             trajectory = np.array(trajectory)

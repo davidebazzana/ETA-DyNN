@@ -82,10 +82,10 @@ def retrieve_frames(cap:cv.VideoCapture, frames_to_retrieve:list, cropping_data:
         ret, frame = cap.read()
         if not ret:
             break
-        
-        if frame_num in frames_to_retrieve and cropping_data[frame_num] is not None:
-            frame = frame[cropping_data[frame_num][0]:cropping_data[frame_num][1],
-                          cropping_data[frame_num][2]:cropping_data[frame_num][3]]
+
+        if frame_num in frames_to_retrieve and cropping_data[frame_num - 1] is not None:
+            frame = frame[cropping_data[frame_num - 1][0]:cropping_data[frame_num - 1][1],
+                          cropping_data[frame_num - 1][2]:cropping_data[frame_num - 1][3]]
             if 0 not in frame.shape: frames.append(frame)
 
         frame_num += 1

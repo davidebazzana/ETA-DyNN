@@ -23,11 +23,23 @@ def extract(codename:str, dataset:str, dataset_year:str, models_directory:str):
 
     subprocess.run(["python", script] + args)
 
-def experiment(codename:str):
+def experiment(codename:str,
+               use_ee_cnn:bool,
+               use_transferring:bool,
+               use_vit:bool):
     script = "main.py"
 
     args = ["--experiment",
             "--codename", codename]
+
+    if use_ee_cnn:
+        args.append("--use-ee-cnn")
+
+    if use_transferring:
+        args.append("--use-transferring")
+    
+    if use_vit:
+        args.append("--use-vit")
 
     subprocess.run(["python", script] + args)
     
@@ -41,6 +53,9 @@ if __name__ == "__main__":
     parser.add_argument('--dataset-year', type=str, help='2024 or 2025 dataset?')
     parser.add_argument('--models-directory', type=str, help='Path to directory containing models')
     parser.add_argument('--epochs', type=str, help='Training number of epochs')
+    parser.add_argument('--use-ee-cnn', action=argparse.BooleanOptionalAction, help="Experiment with ee-cnn")
+    parser.add_argument('--use-transferring', action=argparse.BooleanOptionalAction, help='Experiment with transferring')
+    parser.add_argument('--use-vit', action=argparse.BooleanOptionalAction, help="Experiment with ViT")
     args = parser.parse_args()
 
     if args.codename is None:
@@ -74,4 +89,7 @@ if __name__ == "__main__":
                 models_directory=args.models_directory)
 
     if args.experiment:
-        experiment(codename)
+        experiment(codename=codename,
+                   use_ee_cnn=args.use_ee_cnn,
+                   use_transferring=args.use_transferring,
+                   use_vit=args.use_vit)

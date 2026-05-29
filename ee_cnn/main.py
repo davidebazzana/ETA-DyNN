@@ -33,6 +33,8 @@ from sklearn.utils import shuffle
 from data.image_dataset import ImageDataset
 from experiments_db import EXPERIMENTS_DB
 from remote import upload
+from vit4v.util import process_video as vit4v_process_video
+from vit4v.lib.train.model_vivit import ModelVivit
 
 transform_test = torchvision.transforms.v2.Compose(
     [
@@ -82,6 +84,9 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', type=str, help='Path to the dataset to be used.')
     parser.add_argument('--dataset-year', type=str, help='2024 or 2025 dataset?')
     parser.add_argument('--model-hist', type=str, help='Path to the model histogram to be used by the key frame selection algorithm.')
+    parser.add_argument('--use-ee-cnn', action=argparse.BooleanOptionalAction, help='Experiment with ee-cnn')
+    parser.add_argument('--use-transferring', action=argparse.BooleanOptionalAction, help='Experiment with transferring')
+    parser.add_argument('--use-vit', action=argparse.BooleanOptionalAction, help='Experiment with ViT')
     args = parser.parse_args()
 
     logging.getLogger("codecarbon").disabled = True
@@ -423,7 +428,7 @@ if __name__ == "__main__":
         models_directory = f"./models/{codename}/"
         models_files = [f for f in sorted(os.listdir(models_directory))
                         if (os.path.isfile(os.path.join(models_directory, f)) and
-                            f.endswith('.pt'))]
+                            (f.endswith('.pt') or f.endswith('.pth')))]
         final_pattern = r'^final.pt$'
         for model_file in models_files:
             match = re.match(final_pattern, model_file)
@@ -438,140 +443,240 @@ if __name__ == "__main__":
                 model.to(device)
 
         # Iterate over the dataset of videos
-        for label, video_file in tqdm(db.get_dataset_samples("vit_validation")):
-            success = True
+        if args.use_ee_cnn:
+            for label, video_file in tqdm(db.get_dataset_samples("vit_validation")):
+                success = True
 
-            with EmissionsTracker() as kfe_tracker:
-                kfe = KeyFrameExtractor(model_data=model_hist)
-                file_name = os.path.basename(video_file)
-                pattern = r'^([0-9]*) [0-9- ]*.mkv$'
-                res = re.match(pattern, file_name)
-                if res:
-                    video_id = res.group(1)
-                else:
-                    raise RuntimeError(f"Video {video_file}: does not respect pattern")
-                try:
-                    cropped = kfe.extract_frames(video_file,
-                                                 squared=True,
-                                                 num_key_frames=5)
-                except Exception as e:
-                    print("[ee_cnn] Key frame extraction failed", e)
+                with EmissionsTracker() as kfe_tracker:
+                    kfe = KeyFrameExtractor(model_data=model_hist)
+                    file_name = os.path.basename(video_file)
+                    pattern = r'^([0-9]*) [0-9- ]*.mkv$'
+                    res = re.match(pattern, file_name)
+                    if res:
+                        video_id = res.group(1)
+                    else:
+                        raise RuntimeError(f"Video {video_file}: does not respect pattern")
+                    try:
+                        cropped = kfe.extract_frames(video_file,
+                                                     squared=True,
+                                                     num_key_frames=5)
+                    except Exception as e:
+                        print("[ee_cnn] Key frame extraction failed", e)
+                        success = False
+
+                if len(cropped) == 0:
                     success = False
 
-            if len(cropped) == 0:
-                success = False
-                    
-            if success:
-                frames = []
-                for frame_idx, img in enumerate(cropped):
-                    frame = transform_test(img)
-                    frames.append(frame)
-                frames = torch.stack(frames)
+                if success:
+                    frames = []
+                    for frame_idx, img in enumerate(cropped):
+                        frame = transform_test(img)
+                        frames.append(frame)
+                    frames = torch.stack(frames)
 
-                with EmissionsTracker() as ee_cnn_exit_0_tracker:
-                    model.eval()
-                    with torch.no_grad():
-                        frames = frames.to(device)
-                        out = model(frames, force_exit=8)
-                        exit_0_props = np.array([nn.functional.sigmoid(exit_predictions).cpu().detach().numpy() for exit_predictions in out]).squeeze()
-                with EmissionsTracker() as ee_cnn_exit_1_tracker:
-                    model.eval()
-                    with torch.no_grad():
-                        frames = frames.to(device)
-                        out = model(frames)
-                        exit_1_props = np.array([nn.functional.sigmoid(exit_predictions).cpu().detach().numpy() for exit_predictions in out]).squeeze()
+                    with EmissionsTracker() as ee_cnn_exit_0_tracker:
+                        model.eval()
+                        with torch.no_grad():
+                            frames = frames.to(device)
+                            out = model(frames, force_exit=8)
+                            exit_0_props = np.array([nn.functional.sigmoid(exit_predictions).cpu().detach().numpy() for exit_predictions in out]).squeeze()
+                    with EmissionsTracker() as ee_cnn_exit_1_tracker:
+                        model.eval()
+                        with torch.no_grad():
+                            frames = frames.to(device)
+                            out = model(frames)
+                            exit_1_props = np.array([nn.functional.sigmoid(exit_predictions).cpu().detach().numpy() for exit_predictions in out]).squeeze()
 
-            with EmissionsTracker() as transferring_tracker:
-                upload(video_file)
-                
-            if success:
-                db.add_modelrun_with_performance(
-                    video_file,
-                    codename,
-                    "ee_cnn",
-                    0,
-                    scores=exit_0_props.tolist(),
-                    preprocessing_perf=(
-                        kfe_tracker.final_emissions_data.duration,
-                        kfe_tracker.final_emissions_data.energy_consumed,
-                        kfe_tracker.final_emissions_data.cpu_energy,
-                        kfe_tracker.final_emissions_data.gpu_energy,
-                        kfe_tracker.final_emissions_data.ram_energy,
-                    ),
-                    inference_perf=(
-                        ee_cnn_exit_0_tracker.final_emissions_data.duration,
-                        ee_cnn_exit_0_tracker.final_emissions_data.energy_consumed,
-                        ee_cnn_exit_0_tracker.final_emissions_data.cpu_energy,
-                        ee_cnn_exit_0_tracker.final_emissions_data.gpu_energy,
-                        ee_cnn_exit_0_tracker.final_emissions_data.ram_energy,
+                if args.use_transferring:
+                    with EmissionsTracker() as transferring_tracker:
+                        upload(video_file)
+
+                if success:
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "ee_cnn",
+                        0,
+                        scores=exit_0_props.tolist(),
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(
+                            ee_cnn_exit_0_tracker.final_emissions_data.duration,
+                            ee_cnn_exit_0_tracker.final_emissions_data.energy_consumed,
+                            ee_cnn_exit_0_tracker.final_emissions_data.cpu_energy,
+                            ee_cnn_exit_0_tracker.final_emissions_data.gpu_energy,
+                            ee_cnn_exit_0_tracker.final_emissions_data.ram_energy,
+                        )
                     )
-                )
-                db.add_modelrun_with_performance(
-                    video_file,
-                    codename,
-                    "ee_cnn",
-                    1,
-                    scores=exit_1_props[-1].tolist(),
-                    preprocessing_perf=(
-                        kfe_tracker.final_emissions_data.duration,
-                        kfe_tracker.final_emissions_data.energy_consumed,
-                        kfe_tracker.final_emissions_data.cpu_energy,
-                        kfe_tracker.final_emissions_data.gpu_energy,
-                        kfe_tracker.final_emissions_data.ram_energy,
-                    ),
-                    inference_perf=(
-                        ee_cnn_exit_1_tracker.final_emissions_data.duration,
-                        ee_cnn_exit_1_tracker.final_emissions_data.energy_consumed,
-                        ee_cnn_exit_1_tracker.final_emissions_data.cpu_energy,
-                        ee_cnn_exit_1_tracker.final_emissions_data.gpu_energy,
-                        ee_cnn_exit_1_tracker.final_emissions_data.ram_energy,
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "ee_cnn",
+                        1,
+                        scores=exit_1_props[-1].tolist(),
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(
+                            ee_cnn_exit_1_tracker.final_emissions_data.duration,
+                            ee_cnn_exit_1_tracker.final_emissions_data.energy_consumed,
+                            ee_cnn_exit_1_tracker.final_emissions_data.cpu_energy,
+                            ee_cnn_exit_1_tracker.final_emissions_data.gpu_energy,
+                            ee_cnn_exit_1_tracker.final_emissions_data.ram_energy,
+                        )
                     )
-                )
-            else:
-                db.add_modelrun_with_performance(
-                    video_file,
-                    codename,
-                    "ee_cnn",
-                    0,
-                    scores=-1,
-                    preprocessing_perf=(
-                        kfe_tracker.final_emissions_data.duration,
-                        kfe_tracker.final_emissions_data.energy_consumed,
-                        kfe_tracker.final_emissions_data.cpu_energy,
-                        kfe_tracker.final_emissions_data.gpu_energy,
-                        kfe_tracker.final_emissions_data.ram_energy,
-                    ),
-                    inference_perf=(0, 0, 0, 0, 0)
-                )
-                db.add_modelrun_with_performance(
-                    video_file,
-                    codename,
-                    "ee_cnn",
-                    1,
-                    scores=-1,
-                    preprocessing_perf=(
-                        kfe_tracker.final_emissions_data.duration,
-                        kfe_tracker.final_emissions_data.energy_consumed,
-                        kfe_tracker.final_emissions_data.cpu_energy,
-                        kfe_tracker.final_emissions_data.gpu_energy,
-                        kfe_tracker.final_emissions_data.ram_energy,
-                    ),
-                    inference_perf=(0, 0, 0, 0, 0)
-                )
-            transferring_id = db.add_modelrun(
-                video_file,
-                codename,
-                "wifi",
-                0,
-                scores=None
-            )
-            db.add_performance(
-                transferring_id,
-                "transferring",
-                transferring_tracker.final_emissions_data.duration,
-                transferring_tracker.final_emissions_data.energy_consumed,
-                transferring_tracker.final_emissions_data.cpu_energy,
-                transferring_tracker.final_emissions_data.gpu_energy,
-                transferring_tracker.final_emissions_data.ram_energy
-            )
+                else:
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "ee_cnn",
+                        0,
+                        scores=-1,
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(0, 0, 0, 0, 0)
+                    )
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "ee_cnn",
+                        1,
+                        scores=-1,
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(0, 0, 0, 0, 0)
+                    )
+
+                if args.use_transferring:
+                    transferring_id = db.add_modelrun(
+                        video_file,
+                        codename,
+                        "wifi",
+                        0,
+                        scores=None
+                    )
+                    db.add_performance(
+                        transferring_id,
+                        "transferring",
+                        transferring_tracker.final_emissions_data.duration,
+                        transferring_tracker.final_emissions_data.energy_consumed,
+                        transferring_tracker.final_emissions_data.cpu_energy,
+                        transferring_tracker.final_emissions_data.gpu_energy,
+                        transferring_tracker.final_emissions_data.ram_energy
+                    )
+
+        if args.use_vit:
+            vit_pattern = r'^vivit.pth$'
+            for model_file in models_files:
+                print(f"{model_file=}")
+                match = re.match(vit_pattern, model_file)
+                if match:
+                    model_path = os.path.join(models_directory, match.group(0))
+
+                    print("[ViT4V] Loading the model...")
+                    model_vivit:ModelVivit = ModelVivit(hidden_layers=12)
+                    auto_processing = model_vivit.get_image_processor()
+                    RESOLUTION = 224
+                    model_vivit = torch.nn.DataParallel(model_vivit)
+                    model_vivit.load_state_dict(torch.load(model_path, weights_only=True, map_location=device))
+
+            for label, video_file in tqdm(db.get_dataset_samples("vit_validation")):
+                success = True
+
+                with EmissionsTracker() as kfe_tracker:
+                    kfe = KeyFrameExtractor(model_data=model_hist)
+                    # try:
+                    frames = kfe.extract_frames(video_file,
+                                                squared=True,
+                                                return_all_frames=True)
+                    """
+                    except Exception as e:
+                        print("[ee_cnn] Key frame extraction failed", e)
+                        success = False
+                    """
+                if success and len(frames) > 0:
+                    with EmissionsTracker() as vit_tracker:
+                        try:
+                            vit4v_predictions = vit4v_process_video(model_vivit,
+                                                                    video_file,
+                                                                    window_size=32,
+                                                                    device=device,
+                                                                    model_resolution= RESOLUTION,
+                                                                    image_processing=auto_processing,
+                                                                    frames=frames)
+                        except:
+                            print("vit4v_process_video failed")
+                            success = False
+                if success:
+                    vit4v_predictions = list(vit4v_predictions)
+                    if len(vit4v_predictions) == 0:
+                        vit4v_pred = -1
+                    elif sum(vit4v_predictions)/len(vit4v_predictions) > 0.5:
+                        vit4v_pred = 1
+                    else:
+                        vit4v_pred = 0
+
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "vit4v",
+                        None,
+                        scores=vit4v_pred,
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(
+                            vit_tracker.final_emissions_data.duration,
+                            vit_tracker.final_emissions_data.energy_consumed,
+                            vit_tracker.final_emissions_data.cpu_energy,
+                            vit_tracker.final_emissions_data.gpu_energy,
+                            vit_tracker.final_emissions_data.ram_energy,
+                        )
+                    )
+                else:
+                    db.add_modelrun_with_performance(
+                        video_file,
+                        codename,
+                        "vit4v",
+                        None,
+                        scores=-1,
+                        preprocessing_perf=(
+                            kfe_tracker.final_emissions_data.duration,
+                            kfe_tracker.final_emissions_data.energy_consumed,
+                            kfe_tracker.final_emissions_data.cpu_energy,
+                            kfe_tracker.final_emissions_data.gpu_energy,
+                            kfe_tracker.final_emissions_data.ram_energy,
+                        ),
+                        inference_perf=(
+                            vit_tracker.final_emissions_data.duration,
+                            vit_tracker.final_emissions_data.energy_consumed,
+                            vit_tracker.final_emissions_data.cpu_energy,
+                            vit_tracker.final_emissions_data.gpu_energy,
+                            vit_tracker.final_emissions_data.ram_energy,
+                        )
+                    )
+
         db.close()
