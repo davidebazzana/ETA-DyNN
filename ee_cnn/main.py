@@ -587,7 +587,6 @@ if __name__ == "__main__":
         if args.use_vit:
             vit_pattern = r'^vivit.pth$'
             for model_file in models_files:
-                print(f"{model_file=}")
                 match = re.match(vit_pattern, model_file)
                 if match:
                     model_path = os.path.join(models_directory, match.group(0))
