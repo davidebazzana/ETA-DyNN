@@ -456,15 +456,19 @@ if __name__ == "__main__":
                         video_id = res.group(1)
                     else:
                         raise RuntimeError(f"Video {video_file}: does not respect pattern")
-                    try:
-                        cropped = kfe.extract_frames(video_file,
-                                                     squared=True,
-                                                     num_key_frames=5)
+                    # try:
+                    cropped = kfe.extract_frames(video_file,
+                                                 squared=True,
+                                                 num_key_frames=5)
+                    """
                     except Exception as e:
                         print("[ee_cnn] Key frame extraction failed", e)
                         success = False
+                    """
 
                 if len(cropped) == 0:
+                    print("Failed because cropped frames is empty")
+                    print(f"{len(cropped)=}")
                     success = False
 
                 if success:
@@ -535,6 +539,7 @@ if __name__ == "__main__":
                         )
                     )
                 else:
+                    print("Scores = -1")
                     db.add_modelrun_with_performance(
                         video_file,
                         codename,

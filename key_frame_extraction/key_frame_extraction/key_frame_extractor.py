@@ -563,6 +563,7 @@ class KeyFrameExtractor():
             raise RuntimeError(f"Key frame extraction on {video}: no bee movement detected")
             
         key_frames = self.find_key_frames_robust(self.smooth_motion_curve(motion_features[mask]), N_percent=0)
+        
         # Back to the original indexing
         original_indices = np.where(mask)[0]
         key_frames = original_indices[key_frames].tolist()
@@ -590,7 +591,7 @@ class KeyFrameExtractor():
                 bounding_boxes_original_remaining_coords = map_bboxes_to_original([bounding_boxes[i] for i in original_remaining_indices], self.scale)
                 remaining_key_frames, remaining_bb = self.get_best_fit_key_frames(original_remaining_indices, bounding_boxes_original_remaining_coords, remaining_num_key_frames)
 
-                key_frames = key_frames + remaining_key_frames
+                key_frames = key_frames + [i + 1 for i in remaining_key_frames]
                 bounding_boxes_original_coords = bounding_boxes_original_coords + remaining_bb
         
         if return_iou:
