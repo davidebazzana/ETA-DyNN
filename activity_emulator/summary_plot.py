@@ -14,6 +14,9 @@ class SummaryPlot():
                  experiment_codename:str,
                  dataset_codename:str):
         self.db = EXPERIMENTS_DB(db_path)
+        print("ViT4V: ", self.db.get_scores(experiment_codename,
+                                            dataset_codename,
+                                            "vit4v"))
         performance_exit_0 = self.db.get_performance(experiment_codename,
                                                      dataset_codename,
                                                      "ee_cnn",
@@ -47,6 +50,15 @@ class SummaryPlot():
             },
             "wifi": np.array(performance_transferring)
         }
+
+        print(f"{np.mean(self.energy_performance['ee_cnn']['exit_0']['preprocessing'][:, 1])=}")
+        print(f"{np.mean(self.energy_performance['ee_cnn']['exit_0']['inference'][:, 1])=}")
+        """
+        delegation_energy_cost = (np.mean(self.energy_performance['wifi'][:, 1]) +
+                                  np.mean(self.energy_performance['vit4v']['inference'][:, 1]))
+        print(f"{delegation_energy_cost=}")
+        """
+
         self.labels = np.array(self.db.get_labels(dataset_codename))
         self.vit4v_answers = np.array(self.db.get_scores(experiment_codename,
                                                          dataset_codename,
@@ -126,6 +138,7 @@ class SummaryPlot():
         return np.sum(complete_costs_vector), np.sum(baseline_cost)
 
     def compute_transferring_costs(self, p_metric):
+        if self.energy_performance["wifi"].size == 0: return 0, 0
         p_idx = {
             "duration": 0,
             "tot_energy": 1,
@@ -277,7 +290,6 @@ class SummaryPlot():
         self.ax_costs.clear()
         self.ax_costs.axis('off')
         self.ax_costs.set_title("Costs", fontsize=11)
-        print(f'{self.costs["tot_energy"]["system"]["transferring"]=}')
         total_table = self.ax_costs.table(
             cellText=[[f'{self.costs["duration"]["system"]["preprocessing"]:.4f} s',
                        f'{self.costs["duration"]["baseline"]["preprocessing"]:.4f} s',
@@ -287,37 +299,37 @@ class SummaryPlot():
                        f'{self.costs["duration"]["system"]["total"]:.4f} s',
                        f'{self.costs["duration"]["baseline"]["total"]:.4f} s',
                        f'{((self.costs["duration"]["baseline"]["total"] - self.costs["duration"]["system"]["total"])/self.costs["duration"]["baseline"]["total"])*100:.2f}%'],
-                      [f'{self.costs["tot_energy"]["system"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["system"]["inference"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["system"]["transferring"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["system"]["total"]:.4f} kWh',
-                       f'{self.costs["tot_energy"]["baseline"]["total"]:.4f} kWh',
+                      [f'{self.costs["tot_energy"]["system"]["preprocessing"]*1000:.4f} Wh',
+                       f'{self.costs["tot_energy"]["baseline"]["preprocessing"]*1000:.4f} Wh',
+                       f'{self.costs["tot_energy"]["system"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["tot_energy"]["baseline"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["tot_energy"]["system"]["transferring"]*1000:.4f} Wh',
+                       f'{self.costs["tot_energy"]["system"]["total"]*1000:.4f} Wh',
+                       f'{self.costs["tot_energy"]["baseline"]["total"]*1000:.4f} Wh',
                        f'{((self.costs["tot_energy"]["baseline"]["total"] - self.costs["tot_energy"]["system"]["total"])/self.costs["tot_energy"]["baseline"]["total"])*100:.2f}%'],
-                      [f'{self.costs["cpu_energy"]["system"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["system"]["inference"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["system"]["transferring"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["system"]["total"]:.4f} kWh',
-                       f'{self.costs["cpu_energy"]["baseline"]["total"]:.4f} kWh',
+                      [f'{self.costs["cpu_energy"]["system"]["preprocessing"]*1000:.4f} Wh',
+                       f'{self.costs["cpu_energy"]["baseline"]["preprocessing"]*1000:.4f} Wh',
+                       f'{self.costs["cpu_energy"]["system"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["cpu_energy"]["baseline"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["cpu_energy"]["system"]["transferring"]*1000:.4f} Wh',
+                       f'{self.costs["cpu_energy"]["system"]["total"]*1000:.4f} Wh',
+                       f'{self.costs["cpu_energy"]["baseline"]["total"]*1000:.4f} Wh',
                        f'{((self.costs["cpu_energy"]["baseline"]["total"] - self.costs["cpu_energy"]["system"]["total"])/self.costs["cpu_energy"]["baseline"]["total"])*100:.2f}%'],
-                      [f'{self.costs["gpu_energy"]["system"]["preprocessing"]:.4f}  kWh',
-                       f'{self.costs["gpu_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["gpu_energy"]["system"]["inference"]:.4f} kWh',
-                       f'{self.costs["gpu_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{self.costs["gpu_energy"]["system"]["transferring"]:.4f} kWh',
-                       f'{self.costs["gpu_energy"]["system"]["total"]:.4f} kWh',
-                       f'{self.costs["gpu_energy"]["baseline"]["total"]:.4f} kWh',
+                      [f'{self.costs["gpu_energy"]["system"]["preprocessing"]*1000:.4f}  Wh',
+                       f'{self.costs["gpu_energy"]["baseline"]["preprocessing"]*1000:.4f} Wh',
+                       f'{self.costs["gpu_energy"]["system"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["gpu_energy"]["baseline"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["gpu_energy"]["system"]["transferring"]*1000:.4f} Wh',
+                       f'{self.costs["gpu_energy"]["system"]["total"]*1000:.4f} Wh',
+                       f'{self.costs["gpu_energy"]["baseline"]["total"]*1000:.4f} Wh',
                        f'{((self.costs["gpu_energy"]["baseline"]["total"] - self.costs["gpu_energy"]["system"]["total"])/self.costs["gpu_energy"]["baseline"]["total"])*100:.2f}%'],
-                      [f'{self.costs["ram_energy"]["system"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["baseline"]["preprocessing"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["system"]["inference"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["baseline"]["inference"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["system"]["transferring"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["system"]["total"]:.4f} kWh',
-                       f'{self.costs["ram_energy"]["baseline"]["total"]:.4f} kWh',
+                      [f'{self.costs["ram_energy"]["system"]["preprocessing"]*1000:.4f} Wh',
+                       f'{self.costs["ram_energy"]["baseline"]["preprocessing"]*1000:.4f} Wh',
+                       f'{self.costs["ram_energy"]["system"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["ram_energy"]["baseline"]["inference"]*1000:.4f} Wh',
+                       f'{self.costs["ram_energy"]["system"]["transferring"]*1000:.4f} Wh',
+                       f'{self.costs["ram_energy"]["system"]["total"]*1000:.4f} Wh',
+                       f'{self.costs["ram_energy"]["baseline"]["total"]*1000:.4f} Wh',
                        f'{((self.costs["ram_energy"]["baseline"]["total"] - self.costs["ram_energy"]["system"]["total"])/self.costs["ram_energy"]["baseline"]["total"])*100:.2f}%']],
             colLabels=["System (Pre)", "Baseline (Pre)", "System (Inf)", "Baseline (Inf)", "System (Trans)", "System (Tot)", "Baseline (Tot)", "Savings"],
             rowLabels=["Duration", "Tot Energy", "CPU Energy", "GPU Energy", "RAM Energy"],

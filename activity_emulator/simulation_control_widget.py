@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QSpinBox, QDateEdit, QFormLayout, QGridLayout, QFrame, QCheckBox, QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QSpinBox, QDateEdit, QFormLayout, QGridLayout, QFrame, QCheckBox, QSpacerItem, QSizePolicy, QComboBox
 from PyQt5.QtCore import QDate
 from PyQt5.QtCore import *
 from PyQt5.QtGui import QFont
@@ -59,7 +59,10 @@ class SimulationControlWidget(QWidget):
         self.memory_capacity_input.setMaximum(10**9)
         self.memory_capacity_input.setValue(2000)
         self.memory_capacity_input.setMaximumWidth(140)
-        
+
+        self.device = QComboBox()
+        self.device.addItems(["titan", "jetson"])
+
         spacer = QSpacerItem(
             0, 15,
             QSizePolicy.Minimum,
@@ -80,6 +83,7 @@ class SimulationControlWidget(QWidget):
         sim_params_form_layout.addRow("Battery initial SOC:", self.battery_initial_soc_input)
         sim_params_form_layout.addRow("Battery capacity:", self.battery_capacity_input)
         sim_params_form_layout.addRow("Memory capacity:", self.memory_capacity_input)
+        sim_params_form_layout.addRow("Device:", self.device)
         sim_params_form_layout.addItem(spacer)
         sim_params_form_layout.addRow(system_label)
         sim_params_form_layout.addRow("Force delegation:", self.force_delegation_checkbox)
@@ -134,11 +138,13 @@ class SimulationControlWidget(QWidget):
             "battery_capacity": self.battery_capacity_input.value(),
             "memory_capacity": self.memory_capacity_input.value(),
             "force_delegation": self.force_delegation_checkbox.isChecked(),
-            "daily_reset": self.daily_reset_checkbox.isChecked()
+            "daily_reset": self.daily_reset_checkbox.isChecked(),
+            "device": self.device.currentText()
         })
 
     def compare_hardware(self):
-        self.compare_hardware_callback()
+        self.compare_hardware_callback(device=self.device.currentText(),
+                                       battery_initial_soc=self.battery_initial_soc_input.value())
 
     def quit(self):
         self.quit_callback()

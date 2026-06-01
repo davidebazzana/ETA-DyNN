@@ -17,6 +17,8 @@ class ConfidencePlot():
                  prev_pred:ConfidencePlot|None=None,
                  next_pred:ConfidencePlot|None=None):
         self.db = EXPERIMENTS_DB(db_path)
+        print(f"{model_codename=}")
+        print(f"{exit_idx=}")
         self.test_data = self.db.get_scores(experiment_codename,
                                             dataset_codename,
                                             model_codename,
@@ -120,6 +122,8 @@ class ConfidencePlot():
         answers = []
         for sample_preds in self.test_data:
             sample_answers = []
+            if (type(sample_preds) is float or type(sample_preds) is int): sample_preds = [sample_preds]
+            print(f"{sample_preds=}")
             for pred in sample_preds:
                 if pred < self.lower_threshold: 
                     sample_answers.append(0)

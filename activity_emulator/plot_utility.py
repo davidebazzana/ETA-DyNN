@@ -7,8 +7,15 @@ from scipy.interpolate import griddata
 import argparse
 
 
-def thresholds_plot(save:bool=False):
-    with open("thresholds_search_data.pkl", "rb") as f:
+def fitted_slope(y, dt=1.0):
+    y = np.asarray(y)
+    x = np.arange(len(y)) * dt
+    m, b = np.polyfit(x, y, 1)
+    return m
+
+
+def thresholds_plot(data:str, save:bool=False):
+    with open(data, "rb") as f:
         data = pickle.load(f)
 
     keys, inverse_indices = np.unique(data[:, :2], axis=0, return_inverse=True)
@@ -69,7 +76,7 @@ def thresholds_plot(save:bool=False):
         handles=handles,
         title="PV Max Power Output",
         loc='lower center',
-        bbox_to_anchor=(0.5, 0.7),
+        bbox_to_anchor=(0.5, 0.8),
         ncol=3,          # adjust to taste
         frameon=True
     )
@@ -84,9 +91,12 @@ def thresholds_plot(save:bool=False):
         )
 
 
-def comparison_plot(save:bool=False):
-    with open("hardware_comparison_results.pkl", "rb") as f:
+def comparison_plot(data:str, save:bool=False):
+    with open(data, "rb") as f:
         data = pickle.load(f)
+    print(f"{len(data)}")
+    for i in range(64):
+        print(f"{np.sum(data[i]['results'].returned_by_logs[2][:, -1])=}")
 
     values = []
     for d in data:
@@ -99,8 +109,11 @@ def comparison_plot(save:bool=False):
         pdm = (1 / len(d['results'].days)) * np.sum(d['results'].pdm_factor_log)
         hm = (bsi * ere * pdm) ** (1 / 3)
         dropped_tasks = np.mean([dt_log[-1] for dt_log in d['results'].dropped_tasks_logs])
+        returned_by_vit = np.sum(d['results'].returned_by_logs[2][:, -1])
+        print(f"{dropped_tasks=}")
+        # print(f"{returned_by_vit=}")
         # [p, b, m, bsi, ere, pdm, hm, dropped_tasks_logs[0][-1]]
-        values.append([d['P_mod_STC'], d['battery'], d['memory'], bsi, ere, pdm, hm, dropped_tasks])
+        values.append([d['P_mod_STC'], d['battery'], d['memory'], bsi, ere, pdm, hm, dropped_tasks, returned_by_vit])
     values = np.array(values)
     
     keys, inverse_indices = np.unique(values[:, 0], axis=0, return_inverse=True)
@@ -112,17 +125,38 @@ def comparison_plot(save:bool=False):
         print(f"{idx}: {group:.2f}")
     """
     
-    fig = plt.figure(figsize=(25, 15))
-
+    # fig = plt.figure(figsize=(25, 15))
+    # fig = plt.figure(figsize=(35, 20))
+    fig = plt.figure(figsize=(10, 15))
+    
+    """
+    ax_hm = fig.add_subplot(231, projection='3d')
+    ax_bsi = fig.add_subplot(234, projection='3d')
+    ax_ere = fig.add_subplot(235, projection='3d')
+    ax_pdm = fig.add_subplot(236, projection='3d')
+    ax_dt = fig.add_subplot(232, projection='3d')
+    ax_rbv = fig.add_subplot(233, projection='3d')
+    """
+    """
     ax_hm = fig.add_subplot(151, projection='3d')
     ax_bsi = fig.add_subplot(152, projection='3d')
     ax_ere = fig.add_subplot(153, projection='3d')
     ax_pdm = fig.add_subplot(154, projection='3d')
     ax_dt = fig.add_subplot(155, projection='3d')
+    """
+    ax_hm = fig.add_subplot(221, projection='3d')
+    ax_pdm = fig.add_subplot(222, projection='3d')
+    ax_dt = fig.add_subplot(223, projection='3d')
+    ax_rbv = fig.add_subplot(224, projection='3d')
+
+    # fig.subplots_adjust(wspace=0.5, hspace=0.5)
+    # fig.subplots_adjust(wspace=0.5)
+    fig.subplots_adjust(hspace=0.5)
 
     colors = plt.cm.tab20(np.linspace(0, 1, len(groups)))
 
     metric = {
+        """
         "BSI": {
             "ax": ax_bsi,
             "data_idx": 3,
@@ -135,6 +169,7 @@ def comparison_plot(save:bool=False):
             "label": "ERE",
             "title": "Energy Efficiency Reliability"
         },
+        """
         "PDM": {
             "ax": ax_pdm,
             "data_idx": 5,
@@ -152,14 +187,29 @@ def comparison_plot(save:bool=False):
             "data_idx": 7,
             "label": "Count",
             "title": "Dropped Tasks"
+        },
+        "RbV": {
+            "ax": ax_rbv,
+            "data_idx": 8,
+            "label": "Count",
+            "title": "Returned by ViT"
         }
     }
+    """
+        "RbV": {
+            "ax": ax_rbv,
+            "data_idx": 8,
+            "label": "β1",
+            "title": "Returned by ViT"
+        }
+    """
     
     for v in metric.values():
         for i, (key, group) in enumerate(groups.items()):
             X = group[:,  1]  # Battery
             Y = group[:,  2]  # Memory
             Z = group[:,  v["data_idx"]]
+            print(f"{Z.shape=}")
 
             # Create a grid for surface
             xi = np.linspace(X.min(), X.max(), 30)
@@ -171,27 +221,32 @@ def comparison_plot(save:bool=False):
 
             # Plot surface
             v["ax"].plot_surface(Xi, Yi, Zi, color=colors[i], alpha=0.5) # alpha 0.7
+            v["ax"].tick_params(axis='both', labelsize=12)
+            """
             v["ax"].contour(
                 Xi, Yi, Zi,
                 levels=[1.0],      # Z = 1 intersection
                 colors='red',
                 linewidths=2
             )
+            """
 
-        v["ax"].set_xlabel('Battery Capacity (Ah)')
-        v["ax"].set_ylabel('Memory Capacity (# Tasks)')
-        v["ax"].set_zlabel(v["label"])
-        v["ax"].set_title(v["title"])
+        v["ax"].set_xlabel('Battery Capacity (Ah)', fontsize=12, labelpad=15)
+        v["ax"].set_ylabel('Memory Capacity (# Tasks)', fontsize=12, labelpad=15)
+        v["ax"].set_zlabel(v["label"], fontsize=12, labelpad=15)
+        v["ax"].set_title(v["title"], fontsize=12)
 
     handles = [Patch(color=colors[i], label=f'{key} (W)') for i, key in enumerate(groups.keys())]
-    fig.legend(
+    leg = fig.legend(
         handles=handles,
         title="PV Max Power Output",
         loc='lower center',
-        bbox_to_anchor=(0.5, 0.7),
-        ncol=3,          # adjust to taste
-        frameon=True
+        bbox_to_anchor=(0.75, 0.75),
+        ncol=1,          # adjust to taste
+        frameon=True,
+        fontsize=12
     )
+    leg.get_title().set_fontsize(12)
 
     plot_plane_1 = False
     if plot_plane_1:
@@ -215,17 +270,24 @@ def comparison_plot(save:bool=False):
         fig.savefig(
             "hardware_dim_sustainability_metrics.pdf",
             bbox_inches="tight",
-            pad_inches=0.5
+            pad_inches=0.75 # 0.5
         )
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Plotting Utility")
     parser.add_argument('--save', default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('--thresholds', action=argparse.BooleanOptionalAction)
+    parser.add_argument('--data', type=str, help="The file that contains the data to plot.")
     parser.add_argument('--hardware-comparison', action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
+
+    if args.data is None:
+        raise RuntimeError("Provide the path to the file containing the data with --data")
+
     if args.thresholds:
-        thresholds_plot(save=args.save)
+        thresholds_plot(data=args.data,
+                        save=args.save)
     if args.hardware_comparison:
-        comparison_plot(save=args.save)
+        comparison_plot(data=args.data,
+                        save=args.save)

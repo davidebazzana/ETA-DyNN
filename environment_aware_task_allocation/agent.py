@@ -491,7 +491,12 @@ class Agent():
         label = self.sample.label
         if decision:
             # Has elaborated locally
-            energy_used = self.battery.use(self.stage_energy_cost)
+            # energy_used = self.battery.use(self.stage_energy_cost)
+            if self.t_s == 0:
+                stage_energy_cost = self.sample.preprocessing_performance + self.sample.exit_0_performance
+            else:
+                stage_energy_cost = self.sample.exit_1_performance
+            energy_used = self.battery.use(stage_energy_cost)
             if self.sample.returned_by == self.t_s:
                 returned_by = self.sample.returned_by
                 answer = self.sample.answer
@@ -511,12 +516,14 @@ class Agent():
                     answer = self.sample.answer
                     label = self.sample.label
 
-                    energy_used += self.battery.use(self.delegation_energy_cost)
+                    # energy_used += self.battery.use(self.delegation_energy_cost)
+                    energy_used += self.battery.use(self.sample.transferring_performance)
 
                     self.t_s = 0
         else:
             # Has delegated
-            energy_used = self.battery.use(self.delegation_energy_cost)
+            # energy_used = self.battery.use(self.delegation_energy_cost)
+            energy_used = self.battery.use(self.sample.transferring_performance)
 
             returned_by = self.n_stages
             # TODO

@@ -45,7 +45,11 @@ class SolcastDataset():
 
         self.valid_dates = np.array(self.valid_dates)
         if partition == "train":
-            self.valid_dates = self.valid_dates[181.188]
+            self.valid_dates = self.valid_dates[181:188]
+        """
+        elif partition == "validation":
+            self.valid_dates = self.valid_dates[0:31]
+        """
 
         for date in tqdm(self.valid_dates, desc="Retrieving data"):
             self.interesting_dates.append(date)

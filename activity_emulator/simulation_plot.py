@@ -75,6 +75,14 @@ class SimulationPlot():
         stage_cost_logs_mean, stage_cost_logs_std = self.get_mean_std(stage_cost_logs)
         delegation_cost_logs_mean, delegation_cost_logs_std = self.get_mean_std(delegation_cost_logs)
 
+        r0 = np.sum(returned_by_logs[0][:, -1])
+        r1 = np.sum(returned_by_logs[1][:, -1])
+        r2 = np.sum(returned_by_logs[2][:, -1])
+        rn = np.sum(returned_by_none_logs[:, -1])
+        tot_r = r0 + r1 + r2 + rn
+        print(f"{tot_r=}")
+        print(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {(np.sum(dropped_tasks_logs[:, -1]) / (tot_r)) * 100=}")
+        print(f"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {np.sum(dropped_tasks_logs[:, -1])=}")
         print(f"{battery_logs=}")
         within_opt_range = (battery_logs > 0.4) & (battery_logs < 0.8)
         perc_within_opt_range = np.sum(within_opt_range) / battery_logs.size

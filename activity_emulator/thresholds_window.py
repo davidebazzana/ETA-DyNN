@@ -163,7 +163,8 @@ class ThresholdsWindow(QWidget):
             'returned_by_vit4v': np.copy(self.plot_widget_summary.sp.returned_by_vit4v),
             'global_answers': np.copy(self.plot_widget_summary.sp.global_answers),
             'vit4v_answers': np.copy(self.plot_widget_summary.sp.vit4v_answers),
-            'labels': np.copy(self.plot_widget_summary.sp.labels)
+            'labels': np.copy(self.plot_widget_summary.sp.labels),
+            'energy_performance': self.plot_widget_summary.sp.energy_performance
         }
 
         return data

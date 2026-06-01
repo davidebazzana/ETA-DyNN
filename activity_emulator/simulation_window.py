@@ -41,8 +41,9 @@ class SimulationWindow(QWidget):
         self.simulation_data_results = None
         # layout.addWidget(simulation_control_widget)
         
-    def compare_hardware(self):
-        self.simulation.compare_hardware()
+    def compare_hardware(self, device:str, battery_initial_soc:float):
+        self.simulation.compare_hardware(device=device,
+                                         battery_initial_soc=battery_initial_soc)
 
     def launch_simulation(self, simulation_params):
         self.simulation.launch_simulation(**simulation_params,

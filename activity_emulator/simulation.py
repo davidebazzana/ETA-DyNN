@@ -15,7 +15,7 @@ from environment_aware_task_allocation.experiment import Experiment
 
 
 def launch_simulation_worker(args):
-    cls, init_soc, p, b, m = args
+    cls, init_soc, p, b, m, device = args
     result = cls.launch_simulation(
         P_mod_STC=p,
         battery_initial_soc=init_soc,
@@ -23,6 +23,7 @@ def launch_simulation_worker(args):
         memory_capacity=m,
         force_delegation=False,
         daily_reset=False,
+        device=device,
         solcast_partition="train"
     )
 
@@ -46,6 +47,7 @@ class Simulation():
                             global_answers,
                             vit4v_answers,
                             labels,
+                            energy_performance,
                             dt:int=10):
         self.dt = dt
         
@@ -53,7 +55,7 @@ class Simulation():
                                                 returned_by_e1,
                                                 returned_by_vit4v)
         
-        self.dataset = Dataset(scores, returned_by, global_answers, vit4v_answers, labels)
+        self.dataset = Dataset(scores, returned_by, global_answers, vit4v_answers, labels, energy_performance)
         # Write answers dataset to file
         with open("experiment_samples_dataset.pkl", "wb") as f:
             pickle.dump(self.dataset, f)
@@ -63,14 +65,56 @@ class Simulation():
             self.dataset = pickle.load(f)
             
     def compare_hardware(self,
-                         battery_initial_soc:float=0.5):
+                         device:str,
+                         battery_initial_soc:int=50):
+        hardware_dims = {
+            "titan": {
+                "module_powers": {
+                    "min": 100,
+                    "max": 700
+                },
+                "battery_capacities": {
+                    "min": 20,
+                    "max": 500
+                },
+                "memory_capacities": {
+                    "min": 20,
+                    "max": 5_000
+                }
+            },
+            "jetson": {
+                "module_powers": {
+                    "min": 10,
+                    "max": 70
+                },
+                "battery_capacities": {
+                    "min": 20,
+                    "max": 500
+                },
+                "memory_capacities": {
+                    "min": 20,
+                    "max": 5_000
+                }
+            }
+        }
+        """
         n = 4
-        init_soc = 50
         module_powers = np.linspace(20, 500, n, dtype=int)
         battery_capacities = np.linspace(20, 500, n, dtype=int)
         memory_capacities = np.linspace(20, 5_000, n, dtype=int)
+        """
+        n = 4
+        module_powers = np.linspace(hardware_dims[device]["module_powers"]["min"],
+                                    hardware_dims[device]["module_powers"]["max"], n, dtype=int)
+        battery_capacities = np.linspace(hardware_dims[device]["battery_capacities"]["min"],
+                                         hardware_dims[device]["battery_capacities"]["max"], n, dtype=int)
+        memory_capacities = np.linspace(hardware_dims[device]["memory_capacities"]["min"],
+                                        hardware_dims[device]["memory_capacities"]["max"], n, dtype=int)
 
-        tasks = [(self, init_soc, p, b, m) for p, b, m in itertools.product(module_powers, battery_capacities, memory_capacities)]
+        print(f"{module_powers=}")
+        print(f"{battery_capacities=}")
+        print(f"{memory_capacities=}")
+        tasks = [(self, battery_initial_soc, p, b, m, device) for p, b, m in itertools.product(module_powers, battery_capacities, memory_capacities)]
 
         results = []
         with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
@@ -78,7 +122,7 @@ class Simulation():
                 results.append(res)
                 print(f"[ProcessPoolExecutor] {len(results)=}")
         
-        with open("hardware_comparison_results_3.pkl", "wb") as f:
+        with open("hardware_comparison_results_4.pkl", "wb") as f:
             pickle.dump(results, f)
         
 
@@ -89,6 +133,7 @@ class Simulation():
                           memory_capacity:int,
                           force_delegation:bool,
                           daily_reset:bool,
+                          device:str,
                           end_callback=None,
                           solcast_partition:str="validation"):
         battery_initial_soc = battery_initial_soc / 100
@@ -99,12 +144,27 @@ class Simulation():
         print(f"{memory_capacity=}")
         print(f"{force_delegation=}")
         print(f"{daily_reset=}")
+        print(f"{device=}")
 
         solcast_dataset_path = "./solcast_2024_sassari.json" # "./solcast_dataset_202408_sassari.json"
         solcast = SolcastDataset(solcast_dataset_path,
                                  dt=self.dt,
                                  P_mod_STC=P_mod_STC,
                                  partition=solcast_partition) # 125
+
+        # Costs in Wh (assuming 10 seconds idle time)
+        energy_costs = {
+            "titan": {
+                "stage": 0.3539396298521146,
+                "idle": 0.2687317150290075,
+                "delegation": 0.056629709442887354
+            },
+            "jetson": {
+                "stage": 0.06556391602883709,
+                "idle": 0.016505677295133903,
+                "delegation": 0.056629709442887354
+            }
+        }
         
         self.experiment = Experiment(dataset=self.dataset,
                                      solcast=solcast,
@@ -113,9 +173,9 @@ class Simulation():
                                      initial_soc=battery_initial_soc,
                                      dt=self.dt,
                                      future_time_window=360,
-                                     stage_energy_cost=0.25, # 0.25
-                                     delegation_energy_cost=0.1, # 0.1
-                                     idle_energy_cost=0.01, # 0.01
+                                     stage_energy_cost=energy_costs[device]["stage"], # 0.25
+                                     delegation_energy_cost=energy_costs[device]["delegation"], # 0.1
+                                     idle_energy_cost=energy_costs[device]["idle"], # 0.01
                                      force_delegation=force_delegation,
                                      daily_reset=daily_reset)
 
