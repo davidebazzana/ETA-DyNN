@@ -24,7 +24,11 @@ class Experiment():
                  delegation_energy_cost:float=0.1,
                  idle_energy_cost:float=0.01,
                  force_delegation:bool=False,
-                 daily_reset:bool=False):
+                 daily_reset:bool=False,
+                 gamma_s_1:float=0.5,
+                 gamma_s_2:float=0.5,
+                 gamma_d_1:float=0.5,
+                 gamma_d_2:float=0.5):
         battery = Battery(battery_capacity=battery_capacity,
                           initial_soc=initial_soc,
                           max_charge_rate=0.5)
@@ -39,10 +43,10 @@ class Experiment():
                            stage_energy_cost=stage_energy_cost,
                            delegation_energy_cost=delegation_energy_cost,
                            idle_energy_cost=idle_energy_cost,
-                           gamma_s_1=0.5, # 0.7,
-                           gamma_s_2=0.5, # 0.3,
-                           gamma_d_1=0.5, # 0.9,
-                           gamma_d_2=0.5) # 0.2)
+                           gamma_s_1=gamma_s_1, # 0.5, # 0.7,
+                           gamma_s_2=gamma_s_2, # 0.5, # 0.3,
+                           gamma_d_1=gamma_d_1, # 0.5, # 0.9,
+                           gamma_d_2=gamma_d_2) # 0.5) # 0.2)
         self.force_delegation = force_delegation
         self.daily_reset = daily_reset
 
@@ -64,6 +68,7 @@ class Experiment():
 
         
     def launch(self):
+        
         ts = None
         days = []
         gtis_logs = []
@@ -99,11 +104,17 @@ class Experiment():
         energy_dem_logs = []
         energy_harv_logs = []
 
+        sum_energy_del = []
+        sum_energy_harv = []
+
         t_log = []
         t_in_opt_range_log = []
         battery_charge_cycles_log = []
         ere_factor_log = []
         pdm_factor_log = []
+
+        evidence_trend_1st_logs = []
+        evidence_trend_2nd_logs = []
 
         prev_date = datetime.utcfromtimestamp(0).date()
         for day, data in enumerate(self.solcast):
@@ -176,11 +187,28 @@ class Experiment():
             energy_dem_logs.append(self.agent.energy_demand_log)
             energy_harv_logs.append(self.agent.energy_harvested_log)
 
+            print(f"{np.sum(self.agent.energy_delivered_log)=}")
+            print(f"{np.sum(self.agent.energy_harvested_log)=}")
+            print(f"{self.agent.battery_log[-1]}")
+            sum_energy_del.append(np.sum(self.agent.energy_delivered_log))
+            sum_energy_harv.append(np.sum(self.agent.energy_harvested_log))
+
             if self.daily_reset:
                 self.agent.reset()
             else:
                 self.agent.reset_logs()
+
+            evidence_trend_1st_logs.append(self.agent.evidence_trend_1st_log)
+            evidence_trend_2nd_logs.append(self.agent.evidence_trend_2nd_log)
+
+        print(f"{np.mean(evidence_trend_1st_logs)=}")
+        print(f"{np.std(evidence_trend_1st_logs)=}")
+        print(f"{np.mean(evidence_trend_2nd_logs)=}")
+        print(f"{np.std(evidence_trend_2nd_logs)=}")
             
+        print(f"{np.sum(sum_energy_del)=}")
+        print(f"{np.sum(sum_energy_harv)=}")
+                
         ts = np.array(ts)
         days = np.array(days)
         gtis_logs = np.array(gtis_logs)

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QSpinBox, QDateEdit, QFormLayout, QGridLayout, QFrame, QCheckBox, QSpacerItem, QSizePolicy, QComboBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QSpinBox, QDateEdit, QFormLayout, QGridLayout, QFrame, QCheckBox, QSpacerItem, QSizePolicy, QComboBox, QDoubleSpinBox
 from PyQt5.QtCore import QDate
 from PyQt5.QtCore import *
 from PyQt5.QtGui import QFont
@@ -72,6 +72,30 @@ class SimulationControlWidget(QWidget):
         system_label = QLabel("System")
         system_label.setFont(form_labels_font)
 
+        self.gamma_s_1 = QDoubleSpinBox()
+        self.gamma_s_1.setRange(0.0, 1.0)
+        self.gamma_s_1.setDecimals(3)
+        self.gamma_s_1.setSingleStep(0.01)
+        self.gamma_s_1.setValue(0.5)
+
+        self.gamma_s_2 = QDoubleSpinBox()
+        self.gamma_s_2.setRange(0.0, 1.0)
+        self.gamma_s_2.setDecimals(3)
+        self.gamma_s_2.setSingleStep(0.01)
+        self.gamma_s_2.setValue(0.5)
+
+        self.gamma_d_1 = QDoubleSpinBox()
+        self.gamma_d_1.setRange(0.0, 1.0)
+        self.gamma_d_1.setDecimals(3)
+        self.gamma_d_1.setSingleStep(0.01)
+        self.gamma_d_1.setValue(0.5)
+
+        self.gamma_d_2 = QDoubleSpinBox()
+        self.gamma_d_2.setRange(0.0, 1.0)
+        self.gamma_d_2.setDecimals(3)
+        self.gamma_d_2.setSingleStep(0.01)
+        self.gamma_d_2.setValue(0.5)
+
         self.force_delegation_checkbox = QCheckBox()
         self.force_delegation_checkbox.setChecked(False)
 
@@ -86,6 +110,14 @@ class SimulationControlWidget(QWidget):
         sim_params_form_layout.addRow("Device:", self.device)
         sim_params_form_layout.addItem(spacer)
         sim_params_form_layout.addRow(system_label)
+        sim_params_form_layout.addRow("γ_s1", self.gamma_s_1)
+        sim_params_form_layout.setAlignment(self.gamma_s_1, Qt.AlignRight)
+        sim_params_form_layout.addRow("γ_s2", self.gamma_s_2)
+        sim_params_form_layout.setAlignment(self.gamma_s_2, Qt.AlignRight)
+        sim_params_form_layout.addRow("γ_d1", self.gamma_d_1)
+        sim_params_form_layout.setAlignment(self.gamma_d_1, Qt.AlignRight)
+        sim_params_form_layout.addRow("γ_d2", self.gamma_d_2)
+        sim_params_form_layout.setAlignment(self.gamma_d_2, Qt.AlignRight)
         sim_params_form_layout.addRow("Force delegation:", self.force_delegation_checkbox)
         sim_params_form_layout.setAlignment(self.force_delegation_checkbox, Qt.AlignRight)
         sim_params_form_layout.addRow("Daily reset the agent:", self.daily_reset_checkbox)
@@ -137,13 +169,21 @@ class SimulationControlWidget(QWidget):
             "battery_initial_soc": self.battery_initial_soc_input.value(),
             "battery_capacity": self.battery_capacity_input.value(),
             "memory_capacity": self.memory_capacity_input.value(),
+            "gamma_s_1": self.gamma_s_1.value(),
+            "gamma_s_2": self.gamma_s_2.value(),
+            "gamma_d_1": self.gamma_d_1.value(),
+            "gamma_d_2": self.gamma_d_2.value(),
             "force_delegation": self.force_delegation_checkbox.isChecked(),
             "daily_reset": self.daily_reset_checkbox.isChecked(),
             "device": self.device.currentText()
         })
 
     def compare_hardware(self):
-        self.compare_hardware_callback(device=self.device.currentText(),
+        self.compare_hardware_callback(gamma_s_1=self.gamma_s_1.value(),
+                                       gamma_s_2=self.gamma_s_2.value(),
+                                       gamma_d_1=self.gamma_d_1.value(),
+                                       gamma_d_2=self.gamma_d_2.value(),
+                                       device=self.device.currentText(),
                                        battery_initial_soc=self.battery_initial_soc_input.value())
 
     def quit(self):

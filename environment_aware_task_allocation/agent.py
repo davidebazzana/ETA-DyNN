@@ -15,21 +15,22 @@ class Agent():
     def __init__(self,
                  battery:Battery,
                  memory:Memory,
-                 dataset:Dataset,
+                 dataset:Dataset|None=None,
                  dt:float=300,
                  n_stages:int=5,
-                 evidence_threshold:float=0.8,
                  future_time_window:int=5,
-                 energy_threshold:float=3,
-                 minimum_battery_requirement:float=5,
                  stage_energy_cost:float=0.24, # Wh
                  delegation_energy_cost:float=0.12, # Wh
                  idle_energy_cost:float=0.01, # Wh
                  gamma_s_1:float=1,
                  gamma_s_2:float=1,
                  gamma_d_1:float=1,
-                 gamma_d_2:float=1):
-        
+                 gamma_d_2:float=1,
+                 test:bool=False):
+        if (not test) and (dataset is None):
+            raise ValueError("Provide dataset")
+        self.test = test
+
         self.t_s = 0
         self.dt = dt
 
@@ -48,10 +49,7 @@ class Agent():
         self.egress_count = 0
         
         self.n_stages = n_stages
-        self.evidence_threshold = evidence_threshold
         self.future_time_window = future_time_window
-        self.energy_threshold = energy_threshold
-        self.minimum_battery_requirement = minimum_battery_requirement
         self.maximum_future_tasks = self.future_time_window * (self.MAXIMUM_EGRESS_RATE / 60) * self.dt
         self.stage_energy_cost = stage_energy_cost
         self.delegation_energy_cost = delegation_energy_cost
@@ -61,7 +59,7 @@ class Agent():
         self.gamma_s_2 = gamma_s_2
         self.gamma_d_1 = gamma_d_1
         self.gamma_d_2 = gamma_d_2
-
+        
         self.recovery_state_log = [0]
         self.dropped_tasks_log = [0]
         
@@ -100,6 +98,9 @@ class Agent():
         self.energy_delivered_log = [0]
         self.energy_demand_log = [0]
         self.energy_harvested_log = [0]
+
+        self.evidence_trend_1st_log = []
+        self.evidence_trend_2nd_log = []
     
     def compute(self,
                 ghi:float,
@@ -126,7 +127,7 @@ class Agent():
             answer, label, returned_by = -1, -1, -1
             energy_used = self.battery.use(self.idle_energy_cost)
         new_tasks, egress_rate, dropped_tasks, energy_demand = self.update_state(ghi, power_output)
-        
+
         self.t += 1
         self.update_logs(decision=decision,
                          answer=answer,
@@ -268,6 +269,9 @@ class Agent():
         irradiance power_output -- the power output of the solar panel
 
         """
+        if self.test:
+            raise RuntimeError("update_state cannot be called in test mode")
+
         self.battery.recharge_battery(power_output, self.dt)
 
         # Update memory level based on solar irradiance. 
@@ -356,14 +360,16 @@ class Agent():
                 evidence_trend = 0.7
             else:
                 evidence_trend = self.sample.exit_0_confidence
+                self.evidence_trend_1st_log.append(evidence_trend)
         elif self.t_s == 1:
             if test:
                 evidence_trend = 0.2
             else:
                 evidence_trend = self.sample.exit_1_confidence - self.sample.exit_0_confidence
+                self.evidence_trend_2nd_log.append(evidence_trend)
         else:
             evidence_trend = hypsecant.pdf(self.t_s)
-        return (float(self.gamma_s_2) * np.exp(-evidence_trend)) + (float(self.gamma_s_1) * c_0) # time_invested)
+        return (float(self.gamma_s_1) * np.exp(-evidence_trend)) + (float(self.gamma_s_2) * c_0) # time_invested)
     
 
     def delegation_cost(self):
@@ -532,7 +538,7 @@ class Agent():
 
             self.t_s = 0
 
-        energy_used = self.battery.wh_to_ah(energy_used)
+        # energy_used = self.battery.wh_to_ah(energy_used)
         return answer, label, returned_by, energy_used
 
     def get_classification_performance(self):
@@ -557,9 +563,13 @@ class Agent():
         return accuracy, precision, recall, f1
 
     def get_sustainability_performance(self):
+        print("GET SUSTAINABILITY METRICS")
         epsilon = 1e-8
+        print(f"{sum(self.energy_delivered_log)=}")
+        print(f"{sum(self.energy_harvested_log)=}")
         ere_factor = sum(self.energy_delivered_log) / (sum(self.energy_harvested_log) + epsilon)
         pdm_factor = sum(self.energy_delivered_log) / (sum(self.energy_demand_log) + epsilon)
+        print(f"{ere_factor=}")
 
         return self.t_in_opt_range, self.t, self.battery.n_charge_cycles, ere_factor, pdm_factor
 

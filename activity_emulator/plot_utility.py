@@ -94,9 +94,11 @@ def thresholds_plot(data:str, save:bool=False):
 def comparison_plot(data:str, save:bool=False):
     with open(data, "rb") as f:
         data = pickle.load(f)
+    """
     print(f"{len(data)}")
     for i in range(64):
         print(f"{np.sum(data[i]['results'].returned_by_logs[2][:, -1])=}")
+    """
 
     values = []
     for d in data:
@@ -110,7 +112,7 @@ def comparison_plot(data:str, save:bool=False):
         hm = (bsi * ere * pdm) ** (1 / 3)
         dropped_tasks = np.mean([dt_log[-1] for dt_log in d['results'].dropped_tasks_logs])
         returned_by_vit = np.sum(d['results'].returned_by_logs[2][:, -1])
-        print(f"{dropped_tasks=}")
+        # print(f"{dropped_tasks=}")
         # print(f"{returned_by_vit=}")
         # [p, b, m, bsi, ere, pdm, hm, dropped_tasks_logs[0][-1]]
         values.append([d['P_mod_STC'], d['battery'], d['memory'], bsi, ere, pdm, hm, dropped_tasks, returned_by_vit])
@@ -145,7 +147,7 @@ def comparison_plot(data:str, save:bool=False):
     ax_dt = fig.add_subplot(155, projection='3d')
     """
     ax_hm = fig.add_subplot(221, projection='3d')
-    ax_pdm = fig.add_subplot(222, projection='3d')
+    # ax_pdm = fig.add_subplot(222, projection='3d')
     ax_dt = fig.add_subplot(223, projection='3d')
     ax_rbv = fig.add_subplot(224, projection='3d')
 
@@ -169,13 +171,13 @@ def comparison_plot(data:str, save:bool=False):
             "label": "ERE",
             "title": "Energy Efficiency Reliability"
         },
-        """
         "PDM": {
             "ax": ax_pdm,
             "data_idx": 5,
             "label": "PDM",
             "title": "Power Demand Match"
         },
+        """
         "HM": {
             "ax": ax_hm,
             "data_idx": 6,
@@ -209,7 +211,7 @@ def comparison_plot(data:str, save:bool=False):
             X = group[:,  1]  # Battery
             Y = group[:,  2]  # Memory
             Z = group[:,  v["data_idx"]]
-            print(f"{Z.shape=}")
+            # print(f"{Z.shape=}")
 
             # Create a grid for surface
             xi = np.linspace(X.min(), X.max(), 30)

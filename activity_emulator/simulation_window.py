@@ -12,7 +12,7 @@ class SimulationWindow(QWidget):
         super().__init__()
         self.stacked_widget = stacked_widget
 
-        self.simulation = Simulation(self.end_of_simulation)
+        self.simulation = Simulation()
 
         main_layout = QHBoxLayout(self)
 
@@ -41,8 +41,18 @@ class SimulationWindow(QWidget):
         self.simulation_data_results = None
         # layout.addWidget(simulation_control_widget)
         
-    def compare_hardware(self, device:str, battery_initial_soc:float):
-        self.simulation.compare_hardware(device=device,
+    def compare_hardware(self,
+                         gamma_s_1:float,
+                         gamma_s_2:float,
+                         gamma_d_1:float,
+                         gamma_d_2:float,
+                         device:str,
+                         battery_initial_soc:float):
+        self.simulation.compare_hardware(gamma_s_1=gamma_s_1,
+                                         gamma_s_2=gamma_s_2,
+                                         gamma_d_1=gamma_d_1,
+                                         gamma_d_2=gamma_d_2,
+                                         device=device,
                                          battery_initial_soc=battery_initial_soc)
 
     def launch_simulation(self, simulation_params):

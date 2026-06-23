@@ -14,9 +14,7 @@ class SummaryPlot():
                  experiment_codename:str,
                  dataset_codename:str):
         self.db = EXPERIMENTS_DB(db_path)
-        print("ViT4V: ", self.db.get_scores(experiment_codename,
-                                            dataset_codename,
-                                            "vit4v"))
+        # print("ViT4V: ", self.db.get_scores(experiment_codename, dataset_codename, "vit4v"))
         performance_exit_0 = self.db.get_performance(experiment_codename,
                                                      dataset_codename,
                                                      "ee_cnn",
@@ -51,8 +49,8 @@ class SummaryPlot():
             "wifi": np.array(performance_transferring)
         }
 
-        print(f"{np.mean(self.energy_performance['ee_cnn']['exit_0']['preprocessing'][:, 1])=}")
-        print(f"{np.mean(self.energy_performance['ee_cnn']['exit_0']['inference'][:, 1])=}")
+        # print(f"{np.mean(self.energy_performance['ee_cnn']['exit_0']['preprocessing'][:, 1])=}")
+        # print(f"{np.mean(self.energy_performance['ee_cnn']['exit_0']['inference'][:, 1])=}")
         """
         delegation_energy_cost = (np.mean(self.energy_performance['wifi'][:, 1]) +
                                   np.mean(self.energy_performance['vit4v']['inference'][:, 1]))

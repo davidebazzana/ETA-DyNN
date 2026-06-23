@@ -32,7 +32,7 @@ class Dataset():
         labels -- for each sample, the ground truth
         seed -- the seed to use to randomly pick samples
         """
-        print(f"{energy_performance=}")
+        # print(f"{energy_performance=}")
         self.rng = np.random.default_rng(seed=seed)
         self.samples = []
         for idx in range(len(returned_by)):
@@ -54,8 +54,10 @@ class Dataset():
                                                            energy_performance["ee_cnn"]["exit_0"]["inference"][idx][1]),
                                        transferring_performance=energy_performance_wifi))
         self.n = len(self.samples)
+        """
         print("DATASET")
         for s in self.samples: print(f"{s}")
+        """
 
     def pick_random_samples(self, n:int=1):
         """Pick n samples randomly. Default n=1"""

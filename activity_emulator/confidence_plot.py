@@ -17,8 +17,8 @@ class ConfidencePlot():
                  prev_pred:ConfidencePlot|None=None,
                  next_pred:ConfidencePlot|None=None):
         self.db = EXPERIMENTS_DB(db_path)
-        print(f"{model_codename=}")
-        print(f"{exit_idx=}")
+        # print(f"{model_codename=}")
+        # print(f"{exit_idx=}")
         self.test_data = self.db.get_scores(experiment_codename,
                                             dataset_codename,
                                             model_codename,
@@ -55,6 +55,8 @@ class ConfidencePlot():
         # self.fig, (self.ax_hist, self.ax_cm, self.ax_metrics) = plt.subplots(2, 3, figsize=(15, 5))
         counts, _, _ = self.ax_hist.hist(self.train_data, bins=50, edgecolor="black", density=True)
         self.max_hist_y = counts.max()
+        self.ax_hist.set_xlabel("Confidence") # Predicted Probability
+        self.ax_hist.set_ylabel("Density")
 
         # Initial line positions
         x1, x2 = 0, 1
@@ -114,7 +116,7 @@ class ConfidencePlot():
         if event.key == "enter":
             x1 = self.line1.get_xdata()[0]
             x2 = self.line2.get_xdata()[0]
-            print(f"Line 1 = {x1},   Line 2 = {x2}")
+            # print(f"Line 1 = {x1},   Line 2 = {x2}")
 
             plt.close(self.fig)
 
@@ -123,7 +125,7 @@ class ConfidencePlot():
         for sample_preds in self.test_data:
             sample_answers = []
             if (type(sample_preds) is float or type(sample_preds) is int): sample_preds = [sample_preds]
-            print(f"{sample_preds=}")
+            # print(f"{sample_preds=}")
             for pred in sample_preds:
                 if pred < self.lower_threshold: 
                     sample_answers.append(0)
@@ -187,7 +189,7 @@ class ConfidencePlot():
                 }
 
             self.valid_training_answers = len(training_labels) / len(self.train_labels)
-            print(f"Exit {self.exit_idx}: {self.valid_training_answers=}")
+            # print(f"Exit {self.exit_idx}: {self.valid_training_answers=}")
 
         if len(answers) > 0:
             cm = confusion_matrix(labels, answers)

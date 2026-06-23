@@ -44,9 +44,9 @@ class Memory():
         return self.usage() + workload <= self.max_tasks
 
 
-    def set_usage_perc(self, soc:float):
+    def set_usage_perc(self, usage:float):
         """For testing purposes"""
-        target_usage = round(soc * self.max_tasks)
+        target_usage = round(usage * self.max_tasks)
         diff = target_usage - self.usage()
         if diff > 0:
             self.enqueue([None] * diff)

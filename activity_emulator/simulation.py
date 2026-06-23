@@ -15,12 +15,16 @@ from environment_aware_task_allocation.experiment import Experiment
 
 
 def launch_simulation_worker(args):
-    cls, init_soc, p, b, m, device = args
+    cls, init_soc, p, b, m, gamma_s_1, gamma_s_2, gamma_d_1, gamma_d_2, device = args
     result = cls.launch_simulation(
         P_mod_STC=p,
         battery_initial_soc=init_soc,
         battery_capacity=b,
         memory_capacity=m,
+        gamma_s_1=gamma_s_1,
+        gamma_s_2=gamma_s_2,
+        gamma_d_1=gamma_d_1,
+        gamma_d_2=gamma_d_2,
         force_delegation=False,
         daily_reset=False,
         device=device,
@@ -65,6 +69,10 @@ class Simulation():
             self.dataset = pickle.load(f)
             
     def compare_hardware(self,
+                         gamma_s_1:float,
+                         gamma_s_2:float,
+                         gamma_d_1:float,
+                         gamma_d_2:float,
                          device:str,
                          battery_initial_soc:int=50):
         hardware_dims = {
@@ -111,10 +119,10 @@ class Simulation():
         memory_capacities = np.linspace(hardware_dims[device]["memory_capacities"]["min"],
                                         hardware_dims[device]["memory_capacities"]["max"], n, dtype=int)
 
-        print(f"{module_powers=}")
-        print(f"{battery_capacities=}")
-        print(f"{memory_capacities=}")
-        tasks = [(self, battery_initial_soc, p, b, m, device) for p, b, m in itertools.product(module_powers, battery_capacities, memory_capacities)]
+        # print(f"{module_powers=}")
+        # print(f"{battery_capacities=}")
+        # print(f"{memory_capacities=}")
+        tasks = [(self, battery_initial_soc, p, b, m, gamma_s_1, gamma_s_2, gamma_d_1, gamma_d_2, device) for p, b, m in itertools.product(module_powers, battery_capacities, memory_capacities)]
 
         results = []
         with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
@@ -131,6 +139,10 @@ class Simulation():
                           battery_initial_soc:int,
                           battery_capacity:int,
                           memory_capacity:int,
+                          gamma_s_1:float,
+                          gamma_s_2:float,
+                          gamma_d_1:float,
+                          gamma_d_2:float,
                           force_delegation:bool,
                           daily_reset:bool,
                           device:str,
@@ -142,6 +154,10 @@ class Simulation():
         print(f"{battery_initial_soc=}")
         print(f"{battery_capacity=}")
         print(f"{memory_capacity=}")
+        print(f"{gamma_s_1=}")
+        print(f"{gamma_s_2=}")
+        print(f"{gamma_d_1=}")
+        print(f"{gamma_d_2=}")
         print(f"{force_delegation=}")
         print(f"{daily_reset=}")
         print(f"{device=}")
@@ -153,6 +169,7 @@ class Simulation():
                                  partition=solcast_partition) # 125
 
         # Costs in Wh (assuming 10 seconds idle time)
+
         energy_costs = {
             "titan": {
                 "stage": 0.3539396298521146,
@@ -177,7 +194,11 @@ class Simulation():
                                      delegation_energy_cost=energy_costs[device]["delegation"], # 0.1
                                      idle_energy_cost=energy_costs[device]["idle"], # 0.01
                                      force_delegation=force_delegation,
-                                     daily_reset=daily_reset)
+                                     daily_reset=daily_reset,
+                                     gamma_s_1=gamma_s_1,
+                                     gamma_s_2=gamma_s_2,
+                                     gamma_d_1=gamma_d_1,
+                                     gamma_d_2=gamma_d_2)
 
         self.data_log = self.experiment.launch()
 

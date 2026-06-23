@@ -484,6 +484,6 @@ if __name__ == "__main__":
     performance = db.get_performance("experiment_3", "vit_validation", "vit4v")
 
     labels = db.get_labels("vit_validation")
-    print("vit_validation", labels)
+    # print("vit_validation", labels)
 
     db.close()

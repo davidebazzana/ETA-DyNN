@@ -49,7 +49,7 @@ class TimeSelector(QWidget):
             self.interval_change_callback(choice)
 
     def day_choice(self, choice):
-        print(f"DAY CHOICE: {choice}")
+        # print(f"DAY CHOICE: {choice}")
         if choice != "":
             self.select_day_callback(choice)
         

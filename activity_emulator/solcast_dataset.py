@@ -173,7 +173,7 @@ class SolcastDataset():
         highlight_indexes = []
         for idx, date in enumerate(self.valid_dates):
             correlation = self.correlation(date)
-            print(f"{date} correlation to {self.ref_day}: {correlation}")
+            # print(f"{date} correlation to {self.ref_day}: {correlation}")
 
             correlations.append((correlation, date))
 
